@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
 
+import { ProtectedRoute } from '@/components/auth'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import Landing from '@/pages/Landing'
 import Login from '@/pages/Login'
@@ -48,7 +49,7 @@ function App() {
           <Route path="/about" element={<About />} />
           <Route path="/500" element={<Error500 />} />
 
-          <Route path="/dashboard" element={<DashboardLayout />}>
+          <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="companies/:companyId" element={<CompanyDetail />} />
             <Route path="companies/:companyId/narratives/:narrativeId" element={<NarrativeDrillDown />} />
@@ -57,20 +58,20 @@ function App() {
             <Route path="checkout" element={<Checkout />} />
             <Route path="historical" element={<HistoricalComparison />} />
           </Route>
-          <Route path="/dashboard/raw-payload/:payloadId" element={<DashboardLayout />}>
+          <Route path="/dashboard/raw-payload/:payloadId" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
             <Route index element={<RawPayloadViewer />} />
           </Route>
 
-          <Route path="/admin" element={<DashboardLayout />}>
+          <Route path="/admin" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
             <Route index element={<AdminDashboard />} />
           </Route>
-          <Route path="/admin/users" element={<DashboardLayout />}>
+          <Route path="/admin/users" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
             <Route index element={<UserManagement />} />
           </Route>
-          <Route path="/admin/ingestion" element={<DashboardLayout />}>
+          <Route path="/admin/ingestion" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
             <Route index element={<IngestionMonitor />} />
           </Route>
-          <Route path="/admin/analytics" element={<DashboardLayout />}>
+          <Route path="/admin/analytics" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
             <Route index element={<Analytics />} />
           </Route>
 

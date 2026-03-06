@@ -11,9 +11,10 @@ export interface SignUpInput {
 }
 
 export interface AuthResponse {
-  token: string
+  token?: string
   refreshToken?: string
   user: UserAuth
+  needsEmailVerification?: boolean
 }
 
 export interface UserAuth {
@@ -32,5 +33,10 @@ export interface ResetPasswordInput {
 export interface ConfirmPasswordResetInput {
   token: string
   newPassword: string
-  confirmPassword: string
+  confirmPassword?: string
+}
+
+export interface VerifyEmailResponse {
+  success: boolean
+  message: string
 }

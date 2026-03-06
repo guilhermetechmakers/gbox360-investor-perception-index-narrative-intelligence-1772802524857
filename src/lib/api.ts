@@ -1,3 +1,19 @@
+async function parseErrorResponse(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as Record<string, unknown>
+    const msg =
+      (body?.message as string) ??
+      (body?.error as string) ??
+      (Array.isArray(body?.errors)
+        ? (body.errors as string[]).join(', ')
+        : null)
+    if (typeof msg === 'string' && msg.trim()) return msg
+  } catch {
+    // ignore JSON parse errors
+  }
+  return `Request failed: ${res.status}`
+}
+
 async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -13,17 +29,27 @@ async function apiRequest<T>(
 
   const res = await fetch(url, { ...options, headers })
   if (!res.ok) {
+    const message = await parseErrorResponse(res)
     if (res.status === 401) {
       localStorage.removeItem('auth_token')
-      window.location.href = '/login'
+      const isAuthPage = ['/login', '/signup', '/password-reset', '/email-verification'].some(
+        (p) => window.location.pathname.startsWith(p)
+      )
+      if (!isAuthPage) window.location.href = '/login'
     }
-    throw new Error(`API Error: ${res.status}`)
+    throw new Error(message)
   }
   return res.json() as Promise<T>
 }
 
 export const api = {
-  get: <T>(endpoint: string) => apiRequest<T>(endpoint),
+  get: <T>(endpoint: string, params?: Record<string, string>) => {
+    const url =
+      params && Object.keys(params).length > 0
+        ? `${endpoint}?${new URLSearchParams(params).toString()}`
+        : endpoint
+    return apiRequest<T>(url)
+  },
   post: <T>(endpoint: string, data: unknown) =>
     apiRequest<T>(endpoint, { method: 'POST', body: JSON.stringify(data) }),
   put: <T>(endpoint: string, data: unknown) =>
