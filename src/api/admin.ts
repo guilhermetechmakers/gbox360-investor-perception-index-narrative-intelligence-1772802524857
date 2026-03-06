@@ -17,6 +17,9 @@ import type {
   PaginatedUsersResponse,
   PaginatedAuditLogsResponse,
   SubscriptionOverview,
+  AnalyticsMetrics,
+  ScheduledExport,
+  BillingPlan,
 } from '@/types/admin'
 
 /** Safe array extraction from API response */
@@ -108,6 +111,52 @@ const MOCK_ANALYTICS: AnalyticsUsage = {
   ingestionThroughput: 1240,
   featureAdoption: 72,
 }
+
+/** Mock analytics metrics for usage/throughput/adoption */
+const MOCK_ANALYTICS_METRICS: AnalyticsMetrics = {
+  mau: 38,
+  queriesPerUser: 12.4,
+  ingestionThroughput: 1240,
+  featureAdoption: {
+    ipiOverview: 95,
+    narrativeDrillDown: 72,
+    exportAudit: 58,
+    companyDetail: 81,
+  },
+}
+
+/** Mock scheduled exports */
+const MOCK_SCHEDULED_EXPORTS: ScheduledExport[] = [
+  {
+    id: 'se-1',
+    name: 'Weekly leadership report',
+    cadence: 'weekly',
+    metrics: ['mau', 'throughput', 'adoption'],
+    timeframe: 'last_30_days',
+    format: 'PDF',
+    lastRun: '2025-03-03T09:00:00Z',
+    nextRun: '2025-03-10T09:00:00Z',
+    status: 'active',
+  },
+  {
+    id: 'se-2',
+    name: 'Daily ingestion summary',
+    cadence: 'daily',
+    metrics: ['throughput'],
+    timeframe: 'last_7_days',
+    format: 'CSV',
+    lastRun: '2025-03-06T06:00:00Z',
+    nextRun: '2025-03-07T06:00:00Z',
+    status: 'active',
+  },
+]
+
+/** Mock billing plans for Admin Dashboard */
+const MOCK_BILLING_PLANS: BillingPlan[] = [
+  { id: 'bp-1', name: 'Starter', status: 'active', period: 'monthly', nextBillingDate: '2025-04-01', amount: 49 },
+  { id: 'bp-2', name: 'Pro', status: 'active', period: 'monthly', nextBillingDate: '2025-04-15', amount: 149 },
+  { id: 'bp-3', name: 'Enterprise', status: 'active', period: 'monthly', nextBillingDate: '2025-04-20', amount: 499 },
+]
 
 export const adminApi = {
   async getBillingSummary(): Promise<BillingSummary> {
@@ -338,6 +387,79 @@ export const adminApi = {
     return MOCK_ANALYTICS
   },
 
+  async getUsageMetrics(): Promise<AnalyticsMetrics> {
+    try {
+      const res = await api.get<AnalyticsMetrics | { data: AnalyticsMetrics }>('/admin/analytics/usage-metrics')
+      if (res && typeof res === 'object' && !Array.isArray(res)) {
+        if ('mau' in res) return res as AnalyticsMetrics
+        return (res as { data: AnalyticsMetrics }).data ?? MOCK_ANALYTICS_METRICS
+      }
+    } catch {
+      // fallback
+    }
+    return MOCK_ANALYTICS_METRICS
+  },
+
+  async getIngestionThroughput(): Promise<{ throughput: number; delta?: number }> {
+    try {
+      const res = await api.get<{ throughput: number; delta?: number }>('/admin/analytics/ingestion-throughput')
+      if (res && typeof res === 'object' && 'throughput' in res) return res as { throughput: number; delta?: number }
+    } catch {
+      // fallback
+    }
+    return { throughput: MOCK_ANALYTICS_METRICS.ingestionThroughput, delta: 5.2 }
+  },
+
+  async getFeatureAdoption(): Promise<Record<string, number>> {
+    try {
+      const res = await api.get<Record<string, number> | { data: Record<string, number> }>('/admin/analytics/feature-adoption')
+      if (res && typeof res === 'object' && !Array.isArray(res)) {
+        if (typeof (res as Record<string, number>).ipiOverview === 'number') return res as Record<string, number>
+        return (res as { data: Record<string, number> }).data ?? MOCK_ANALYTICS_METRICS.featureAdoption
+      }
+    } catch {
+      // fallback
+    }
+    return MOCK_ANALYTICS_METRICS.featureAdoption
+  },
+
+  async getScheduledReports(): Promise<ScheduledExport[]> {
+    try {
+      const res = await api.get<ScheduledExport[] | { data: ScheduledExport[] }>('/admin/reports/scheduled')
+      const list = Array.isArray(res) ? res : (res as { data?: ScheduledExport[] })?.data ?? []
+      return Array.isArray(list) && list.length > 0 ? list : MOCK_SCHEDULED_EXPORTS
+    } catch {
+      return MOCK_SCHEDULED_EXPORTS
+    }
+  },
+
+  async createScheduledReport(payload: Omit<ScheduledExport, 'id' | 'lastRun' | 'nextRun' | 'status'>): Promise<ScheduledExport> {
+    try {
+      await api.post<ScheduledExport>('/admin/reports/scheduled', payload)
+      return { ...payload, id: `se-${Date.now()}`, status: 'active' }
+    } catch {
+      return { ...payload, id: `se-${Date.now()}`, status: 'active' }
+    }
+  },
+
+  async updateScheduledReport(id: string, payload: Partial<ScheduledExport>): Promise<ScheduledExport> {
+    try {
+      await api.put<ScheduledExport>(`/admin/reports/scheduled/${id}`, payload)
+      return { ...MOCK_SCHEDULED_EXPORTS[0], id, ...payload }
+    } catch {
+      return { ...MOCK_SCHEDULED_EXPORTS[0], id, ...payload }
+    }
+  },
+
+  async deleteScheduledReport(id: string): Promise<{ success: boolean }> {
+    try {
+      await api.delete<{ success: boolean }>(`/admin/reports/scheduled/${id}`)
+      return { success: true }
+    } catch {
+      return { success: true }
+    }
+  },
+
   async exportReport(type: 'csv' | 'json', scope?: string): Promise<Blob> {
     const base = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api'
     const token = localStorage.getItem('auth_token')
@@ -355,5 +477,40 @@ export const adminApi = {
       ? JSON.stringify(MOCK_ANALYTICS, null, 2)
       : Object.entries(MOCK_ANALYTICS).map(([k, v]) => `${k},${v}`).join('\n')
     return new Blob([mockData], { type: type === 'json' ? 'application/json' : 'text/csv' })
+  },
+
+  async generateExport(params: {
+    timeframe: string
+    metrics: string[]
+    format: 'CSV' | 'PDF'
+  }): Promise<Blob> {
+    const base = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api'
+    const token = localStorage.getItem('auth_token')
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    try {
+      const res = await fetch(`${base}/admin/reports/export`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(params),
+      })
+      if (res.ok) return res.blob()
+    } catch {
+      // fallback
+    }
+    const mockData = params.format === 'PDF'
+      ? 'PDF placeholder - use backend to generate'
+      : Object.entries(MOCK_ANALYTICS_METRICS).map(([k, v]) => `${k},${typeof v === 'object' ? JSON.stringify(v) : v}`).join('\n')
+    return new Blob([mockData], { type: params.format === 'PDF' ? 'application/pdf' : 'text/csv' })
+  },
+
+  async getBillingPlans(): Promise<BillingPlan[]> {
+    try {
+      const res = await api.get<BillingPlan[] | { data: BillingPlan[] }>('/admin/billing/details')
+      const list = Array.isArray(res) ? res : (res as { data?: BillingPlan[] })?.data ?? []
+      return Array.isArray(list) && list.length > 0 ? list : MOCK_BILLING_PLANS
+    } catch {
+      return MOCK_BILLING_PLANS
+    }
   },
 }

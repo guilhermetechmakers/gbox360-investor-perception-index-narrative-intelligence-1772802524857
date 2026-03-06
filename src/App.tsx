@@ -18,6 +18,7 @@ import RawPayloadViewer from '@/pages/RawPayloadViewer'
 import Profile from '@/pages/Profile'
 import Settings from '@/pages/Settings'
 import AdminDashboard from '@/pages/AdminDashboard'
+import AdminDashboardPage from '@/pages/AdminDashboardPage'
 import AdminBilling from '@/pages/AdminBilling'
 import UserManagement from '@/pages/UserManagement'
 import IngestionMonitor from '@/pages/IngestionMonitor'
@@ -71,6 +72,7 @@ function App() {
 
           <Route path="/admin" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
             <Route index element={<AdminDashboard />} />
+            <Route path="dashboard" element={<AdminDashboardPage />} />
             <Route path="billing" element={<AdminBilling />} />
             <Route path="users" element={<UserManagement />} />
             <Route path="ingestion" element={<IngestionMonitor />} />

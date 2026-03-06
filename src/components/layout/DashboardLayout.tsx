@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
+  LayoutGrid,
   Building2,
   FileText,
   Settings,
@@ -32,6 +33,7 @@ const navItems = [
 
 const adminItems = [
   { to: '/admin', label: 'Overview', icon: LayoutDashboard },
+  { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutGrid },
   { to: '/admin/users', label: 'Users', icon: Users },
   { to: '/admin/billing', label: 'Billing', icon: CreditCard },
   { to: '/admin/ingestion', label: 'Ingestion', icon: Server },

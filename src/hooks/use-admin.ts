@@ -23,6 +23,11 @@ export const adminKeys = {
   health: ['admin', 'health'] as const,
   subscriptions: ['admin', 'subscriptions'] as const,
   analyticsUsage: ['admin', 'analytics', 'usage'] as const,
+  usageMetrics: ['admin', 'analytics', 'usage-metrics'] as const,
+  ingestionThroughput: ['admin', 'analytics', 'ingestion-throughput'] as const,
+  featureAdoption: ['admin', 'analytics', 'feature-adoption'] as const,
+  scheduledReports: ['admin', 'reports', 'scheduled'] as const,
+  billingPlans: ['admin', 'billing', 'plans'] as const,
 }
 
 export function useBillingSummary() {
@@ -194,10 +199,93 @@ export function useSubscriptions() {
   })
 }
 
+export function useBillingPlans() {
+  return useQuery({
+    queryKey: adminKeys.billingPlans,
+    queryFn: adminApi.getBillingPlans,
+  })
+}
+
 export function useAnalyticsUsage() {
   return useQuery({
     queryKey: adminKeys.analyticsUsage,
     queryFn: adminApi.getAnalyticsUsage,
+  })
+}
+
+export function useUsageMetrics() {
+  return useQuery({
+    queryKey: adminKeys.usageMetrics,
+    queryFn: adminApi.getUsageMetrics,
+  })
+}
+
+export function useIngestionThroughput() {
+  return useQuery({
+    queryKey: adminKeys.ingestionThroughput,
+    queryFn: adminApi.getIngestionThroughput,
+  })
+}
+
+export function useFeatureAdoption() {
+  return useQuery({
+    queryKey: adminKeys.featureAdoption,
+    queryFn: adminApi.getFeatureAdoption,
+  })
+}
+
+export function useScheduledReports() {
+  return useQuery({
+    queryKey: adminKeys.scheduledReports,
+    queryFn: adminApi.getScheduledReports,
+  })
+}
+
+export function useCreateScheduledReport() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: adminApi.createScheduledReport,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminKeys.scheduledReports })
+      toast.success('Scheduled report created')
+    },
+    onError: (err: Error) => {
+      toast.error(err?.message ?? 'Failed to create scheduled report')
+    },
+  })
+}
+
+export function useUpdateScheduledReport() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string
+      payload: Partial<Parameters<typeof adminApi.updateScheduledReport>[1]>
+    }) => adminApi.updateScheduledReport(id, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminKeys.scheduledReports })
+      toast.success('Scheduled report updated')
+    },
+    onError: (err: Error) => {
+      toast.error(err?.message ?? 'Failed to update scheduled report')
+    },
+  })
+}
+
+export function useDeleteScheduledReport() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: adminApi.deleteScheduledReport,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminKeys.scheduledReports })
+      toast.success('Scheduled report deleted')
+    },
+    onError: (err: Error) => {
+      toast.error(err?.message ?? 'Failed to delete scheduled report')
+    },
   })
 }
 
@@ -214,6 +302,26 @@ export function useExportReport() {
       a.click()
       URL.revokeObjectURL(url)
       toast.success('Report exported successfully')
+    },
+    onError: (err: Error) => {
+      toast.error(err?.message ?? 'Export failed')
+    },
+  })
+}
+
+export function useGenerateExport() {
+  return useMutation({
+    mutationFn: (params: { timeframe: string; metrics: string[]; format: 'CSV' | 'PDF' }) =>
+      adminApi.generateExport(params),
+    onSuccess: (blob, { format }) => {
+      const ext = format === 'PDF' ? 'pdf' : 'csv'
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `analytics-report-${new Date().toISOString().slice(0, 10)}.${ext}`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Report generated successfully')
     },
     onError: (err: Error) => {
       toast.error(err?.message ?? 'Export failed')

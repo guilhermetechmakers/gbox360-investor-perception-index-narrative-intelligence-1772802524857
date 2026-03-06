@@ -180,3 +180,41 @@ export interface SubscriptionOverview {
   revenue?: number
   metrics?: Record<string, number>
 }
+
+/** Analytics & Reports types */
+export interface Metrics {
+  mau: number
+  queriesPerUser: number
+  ingestionThroughput: number
+  featureAdoption: Record<string, number>
+}
+
+export type ScheduledExportCadence = 'daily' | 'weekly' | 'monthly'
+export type ScheduledExportFormat = 'CSV' | 'PDF'
+export type ScheduledExportStatus = 'active' | 'paused'
+
+export interface ScheduledExport {
+  id: string
+  name: string
+  cadence: ScheduledExportCadence
+  metrics: string[]
+  timeframe: string
+  format: ScheduledExportFormat
+  lastRun?: string
+  nextRun?: string
+  status?: ScheduledExportStatus
+}
+
+/** Billing plan for Admin Dashboard overview */
+export interface BillingPlanDetail {
+  id: string
+  name: string
+  status: string
+  period: string
+  nextBillingDate: string
+  amount: number
+}
+
+/** Alias for compatibility */
+export type BillingPlan = BillingPlanDetail
+export type AnalyticsMetrics = Metrics

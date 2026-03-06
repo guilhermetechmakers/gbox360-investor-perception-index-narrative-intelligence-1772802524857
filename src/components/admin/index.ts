@@ -1,5 +1,8 @@
 export { AdminControlsPanel } from './AdminControlsPanel'
 export { AdminDashboardOverview } from './AdminDashboardOverview'
+export { AdminUserManagement } from './AdminUserManagement'
+export { BillingOverview } from './BillingOverview'
+export { PlatformAnalyticsTiles } from './PlatformAnalyticsTiles'
 export { AuditLogCard } from './AuditLogCard'
 export { AuditLogViewer } from './AuditLogViewer'
 export { BillingSubscriptionsPanel } from './BillingSubscriptionsPanel'
