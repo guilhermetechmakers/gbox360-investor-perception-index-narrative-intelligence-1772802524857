@@ -28,7 +28,7 @@ export default function UserManagement() {
         </CardHeader>
         <CardContent className="space-y-4">
           <Input placeholder="Search users..." className="max-w-sm" />
-          <Table>
+          <Table aria-label="Users list">
             <TableHeader>
               <TableRow>
                 <TableHead>Email</TableHead>
