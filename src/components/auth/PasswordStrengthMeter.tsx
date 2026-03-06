@@ -28,7 +28,7 @@ export function PasswordStrengthMeter({
   showLabel = true,
 }: PasswordStrengthMeterProps) {
   const { score, label } = getPasswordStrength(password ?? '')
-  const value = Math.min(100, score * 20)
+  const value = Math.min(100, score * 25)
 
   if (!password || password.length === 0) {
     return null
