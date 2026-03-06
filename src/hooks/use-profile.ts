@@ -6,7 +6,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCurrentUser } from '@/hooks/use-auth'
 import { profileApi } from '@/api/profile'
-import { authApi } from '@/api/auth'
 import { toast } from 'sonner'
 import type {
   UserProfile,
@@ -173,7 +172,7 @@ export function useDeleteAccount() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (input: DeleteAccountInput) => profileApi.deleteAccount(input.password),
+    mutationFn: (input: DeleteAccountInput) => profileApi.deleteAccount(input),
     onSuccess: () => {
       queryClient.clear()
       localStorage.removeItem('auth_token')

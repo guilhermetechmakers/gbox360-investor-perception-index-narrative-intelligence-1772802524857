@@ -5,6 +5,7 @@ import {
   Building2,
   FileText,
   Settings,
+  User,
   Users,
   BarChart3,
   Menu,
@@ -102,7 +103,18 @@ export function DashboardLayout() {
               </Link>
             ))}
         </nav>
-        <div className="border-t border-border p-2">
+        <div className="space-y-1 border-t border-border p-2">
+          <Link
+            to="/dashboard/profile"
+            className={cn(
+              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
+              location.pathname === '/dashboard/profile' &&
+                'bg-accent text-accent-foreground'
+            )}
+          >
+            <User className="h-5 w-5 shrink-0" />
+            {!collapsed && <span>Profile</span>}
+          </Link>
           <Link
             to="/dashboard/settings"
             className={cn(
