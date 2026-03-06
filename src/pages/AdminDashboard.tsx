@@ -9,6 +9,7 @@ import {
   AdminControlsPanel,
   RecentAdminActionsPanel,
   QuickAccessTiles,
+  AdminDashboardOverview,
 } from '@/components/admin'
 import { AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -54,6 +55,9 @@ export default function AdminDashboard() {
           </Button>
         </Link>
       </div>
+
+      {/* KPI overview tiles */}
+      <AdminDashboardOverview />
 
       {/* Quick access tiles */}
       <QuickAccessTiles />

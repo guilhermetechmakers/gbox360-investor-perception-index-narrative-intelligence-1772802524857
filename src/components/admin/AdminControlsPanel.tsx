@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useIngestionHealth } from '@/hooks/use-admin'
+import { IngestionReplaysPanel } from './IngestionReplaysPanel'
 import {
   Server,
   Activity,
@@ -102,19 +103,22 @@ export function AdminControlsPanel() {
         </Card>
       </div>
 
-      {/* Ingestion replays & quick actions */}
+      {/* Ingestion replays panel */}
+      <IngestionReplaysPanel />
+
+      {/* Quick actions */}
       <Card className="rounded-card">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="font-serif text-lg">Admin controls</CardTitle>
           <div className="flex gap-2">
             <Link to="/admin/ingestion">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="rounded-full">
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Ingestion monitor
               </Button>
             </Link>
             <Link to="/admin/users">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="rounded-full">
                 <Users className="mr-2 h-4 w-4" />
                 User management
               </Button>

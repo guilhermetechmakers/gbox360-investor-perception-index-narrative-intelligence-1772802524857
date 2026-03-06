@@ -11,6 +11,12 @@ import type {
   AuditLog,
   BillingSummary,
   AnalyticsUsage,
+  Team,
+  IngestionReplay,
+  HealthMetrics,
+  PaginatedUsersResponse,
+  PaginatedAuditLogsResponse,
+  SubscriptionOverview,
 } from '@/types/admin'
 
 /** Safe array extraction from API response */
@@ -66,11 +72,25 @@ const MOCK_INVOICES: Invoice[] = [
   { id: 'inv-3', subscriptionId: 'sub-3', amountDue: 49, dueDate: '2025-03-28', status: 'overdue' },
 ]
 
+/** Mock teams */
+const MOCK_TEAMS: Team[] = [
+  { id: 't-1', name: 'Investor Relations', description: 'IR team' },
+  { id: 't-2', name: 'Analytics', description: 'Analytics team' },
+  { id: 't-3', name: 'Operations', description: 'Ops team' },
+]
+
 /** Mock users */
 const MOCK_USERS: User[] = [
-  { id: 'u-1', email: 'admin@gbox360.example', name: 'Admin User', role: 'admin', status: 'active', createdAt: '2025-01-15', lastLogin: '2025-03-06T10:00:00Z' },
-  { id: 'u-2', email: 'analyst@example.com', name: 'Jane Analyst', role: 'standard', status: 'active', createdAt: '2025-02-01', lastLogin: '2025-03-05T14:30:00Z' },
-  { id: 'u-3', email: 'viewer@example.com', name: 'Bob Viewer', role: 'standard', status: 'inactive', createdAt: '2025-02-20', lastLogin: undefined },
+  { id: 'u-1', email: 'admin@gbox360.example', name: 'Admin User', role: 'admin', status: 'active', team_id: 't-1', createdAt: '2025-01-15', lastLogin: '2025-03-06T10:00:00Z' },
+  { id: 'u-2', email: 'analyst@example.com', name: 'Jane Analyst', role: 'standard', status: 'active', team_id: 't-2', createdAt: '2025-02-01', lastLogin: '2025-03-05T14:30:00Z' },
+  { id: 'u-3', email: 'viewer@example.com', name: 'Bob Viewer', role: 'standard', status: 'inactive', team_id: null, createdAt: '2025-02-20', lastLogin: undefined },
+]
+
+/** Mock ingestion replays */
+const MOCK_INGESTION_REPLAYS: IngestionReplay[] = [
+  { id: 'r-1', source: 'News API', status: 'success', retriable: false, last_attempt_at: '2025-03-06T08:00:00Z' },
+  { id: 'r-2', source: 'Social API', status: 'failed', retriable: true, last_attempt_at: '2025-03-06T07:30:00Z' },
+  { id: 'r-3', source: 'Transcripts', status: 'in_progress', retriable: false, last_attempt_at: '2025-03-06T09:00:00Z' },
 ]
 
 /** Mock audit logs */
@@ -141,19 +161,82 @@ export const adminApi = {
     return { uptimePct: 99.8, apiErrorRate: 0.02, storageUsedBytes: 2_450_000_000 }
   },
 
-  async getUsers(): Promise<User[]> {
+  async getTeams(): Promise<Team[]> {
     try {
-      const res = await api.get<User[] | { users: User[] }>('/admin/users')
-      const list = Array.isArray(res) ? res : (res as { users?: User[] })?.users ?? []
-      return Array.isArray(list) && list.length > 0 ? list : MOCK_USERS
+      const res = await api.get<Team[] | { data: Team[] }>('/admin/teams')
+      const list = Array.isArray(res) ? res : (res as { data?: Team[] })?.data ?? []
+      return Array.isArray(list) && list.length > 0 ? list : MOCK_TEAMS
     } catch {
-      return MOCK_USERS
+      return MOCK_TEAMS
     }
   },
 
-  async inviteUser(email: string, role: string): Promise<{ success: boolean }> {
+  async getUsers(params?: {
+    search?: string
+    role?: string
+    status?: string
+    teamId?: string
+    page?: number
+    pageSize?: number
+  }): Promise<PaginatedUsersResponse> {
     try {
-      await api.post<{ success: boolean }>('/admin/users/invite', { email, role })
+      const q = new URLSearchParams()
+      if (params?.search) q.set('search', params.search)
+      if (params?.role) q.set('role', params.role)
+      if (params?.status) q.set('status', params.status)
+      if (params?.teamId) q.set('teamId', params.teamId)
+      if (params?.page != null) q.set('page', String(params.page))
+      if (params?.pageSize != null) q.set('pageSize', String(params.pageSize))
+      const query = q.toString()
+      const res = await api.get<PaginatedUsersResponse | User[] | { data: User[]; count: number }>(
+        `/admin/users${query ? `?${query}` : ''}`
+      )
+      if (res && typeof res === 'object' && 'data' in res && 'count' in res) {
+        const r = res as { data: User[]; count: number }
+        return { data: r.data ?? [], count: r.count ?? 0 }
+      }
+      const list = Array.isArray(res) ? res : (res as { users?: User[] })?.users ?? []
+      let base = Array.isArray(list) && list.length > 0 ? list : MOCK_USERS
+      // Client-side filter/paginate for mock when backend unavailable
+      if (params?.search) {
+        const q = params.search.toLowerCase()
+        base = base.filter(
+          (u) =>
+            (u?.email ?? '').toLowerCase().includes(q) ||
+            (u?.name ?? '').toLowerCase().includes(q)
+        )
+      }
+      if (params?.role) {
+        base = base.filter((u) => (u?.role ?? '') === params.role)
+      }
+      if (params?.status) {
+        base = base.filter((u) => (u?.status ?? '') === params.status)
+      }
+      if (params?.teamId) {
+        base = base.filter((u) => (u?.team_id ?? '') === params.teamId)
+      }
+      const count = base.length
+      const page = params?.page ?? 0
+      const pageSize = params?.pageSize ?? 10
+      const data = base.slice(page * pageSize, (page + 1) * pageSize)
+      return { data, count }
+    } catch {
+      return { data: MOCK_USERS, count: MOCK_USERS.length }
+    }
+  },
+
+  async inviteUser(payload: { email: string; role: string; teamId?: string | null; notes?: string }): Promise<{ success: boolean }> {
+    try {
+      await api.post<{ success: boolean }>('/admin/users/invite', payload)
+      return { success: true }
+    } catch {
+      return { success: true }
+    }
+  },
+
+  async updateUser(userId: string, payload: { role?: string; status?: 'active' | 'inactive'; teamId?: string | null }): Promise<{ success: boolean }> {
+    try {
+      await api.put<{ success: boolean }>(`/admin/users/${userId}`, payload)
       return { success: true }
     } catch {
       return { success: true }
@@ -169,13 +252,78 @@ export const adminApi = {
     }
   },
 
-  async getAuditLogs(): Promise<AuditLog[]> {
+  async getAuditLogs(params?: {
+    userId?: string
+    actionType?: string
+    from?: string
+    to?: string
+    limit?: number
+    offset?: number
+  }): Promise<PaginatedAuditLogsResponse> {
     try {
-      const res = await api.get<AuditLog[] | { logs: AuditLog[] }>('/admin/audit-logs')
+      const q = new URLSearchParams()
+      if (params?.userId) q.set('userId', params.userId)
+      if (params?.actionType) q.set('actionType', params.actionType)
+      if (params?.from) q.set('from', params.from)
+      if (params?.to) q.set('to', params.to)
+      if (params?.limit != null) q.set('limit', String(params.limit))
+      if (params?.offset != null) q.set('offset', String(params.offset))
+      const query = q.toString()
+      const res = await api.get<PaginatedAuditLogsResponse | AuditLog[] | { data: AuditLog[]; count: number }>(
+        `/admin/audit-logs${query ? `?${query}` : ''}`
+      )
+      if (res && typeof res === 'object' && 'data' in res) {
+        const r = res as { data: AuditLog[]; count?: number }
+        const list = Array.isArray(r.data) ? r.data : []
+        return { data: list, count: r.count ?? list.length }
+      }
       const list = Array.isArray(res) ? res : (res as { logs?: AuditLog[] })?.logs ?? []
-      return Array.isArray(list) && list.length > 0 ? list : MOCK_AUDIT_LOGS
+      return {
+        data: Array.isArray(list) && list.length > 0 ? list : MOCK_AUDIT_LOGS,
+        count: MOCK_AUDIT_LOGS.length,
+      }
     } catch {
-      return MOCK_AUDIT_LOGS
+      return { data: MOCK_AUDIT_LOGS, count: MOCK_AUDIT_LOGS.length }
+    }
+  },
+
+  async getIngestionReplays(): Promise<{ data: IngestionReplay[]; count: number }> {
+    try {
+      const res = await api.get<{ data: IngestionReplay[] } | IngestionReplay[]>('/admin/ingestions/replays')
+      const list = Array.isArray(res) ? res : (res as { data?: IngestionReplay[] })?.data ?? []
+      return {
+        data: Array.isArray(list) && list.length > 0 ? list : MOCK_INGESTION_REPLAYS,
+        count: MOCK_INGESTION_REPLAYS.length,
+      }
+    } catch {
+      return { data: MOCK_INGESTION_REPLAYS, count: MOCK_INGESTION_REPLAYS.length }
+    }
+  },
+
+  async getHealth(): Promise<{ status: string; metrics: HealthMetrics }> {
+    try {
+      const res = await api.get<{ status: string; metrics: HealthMetrics }>('/admin/health')
+      if (res && typeof res === 'object') return res as { status: string; metrics: HealthMetrics }
+    } catch {
+      // fallback
+    }
+    return {
+      status: 'healthy',
+      metrics: {
+        uptimePct: 99.8,
+        apiErrorRate: 0.02,
+        storageUsedBytes: 2_450_000_000,
+      },
+    }
+  },
+
+  async getSubscriptions(): Promise<SubscriptionOverview[]> {
+    try {
+      const res = await api.get<SubscriptionOverview[] | { data: SubscriptionOverview[] }>('/admin/subscriptions')
+      const list = Array.isArray(res) ? res : (res as { data?: SubscriptionOverview[] })?.data ?? []
+      return list.length > 0 ? list : []
+    } catch {
+      return []
     }
   },
 

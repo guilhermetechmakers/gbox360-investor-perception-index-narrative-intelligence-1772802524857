@@ -16,8 +16,12 @@ export const adminKeys = {
     ['admin', 'billing', 'invoices', limit, offset] as const,
   plans: ['admin', 'subscriptions', 'plans'] as const,
   ingestionHealth: ['admin', 'ingestion', 'health'] as const,
-  users: ['admin', 'users'] as const,
-  auditLogs: ['admin', 'audit-logs'] as const,
+  users: (params?: Record<string, unknown>) => ['admin', 'users', params] as const,
+  teams: ['admin', 'teams'] as const,
+  auditLogs: (params?: Record<string, unknown>) => ['admin', 'audit-logs', params] as const,
+  ingestionReplays: ['admin', 'ingestions', 'replays'] as const,
+  health: ['admin', 'health'] as const,
+  subscriptions: ['admin', 'subscriptions'] as const,
   analyticsUsage: ['admin', 'analytics', 'usage'] as const,
 }
 
@@ -65,25 +69,68 @@ export function useIngestionHealth() {
   })
 }
 
-export function useAdminUsers() {
+export function useAdminUsers(params?: {
+  search?: string
+  role?: string
+  status?: string
+  teamId?: string
+  page?: number
+  pageSize?: number
+}) {
   return useQuery({
-    queryKey: adminKeys.users,
-    queryFn: adminApi.getUsers,
+    queryKey: adminKeys.users(params),
+    queryFn: () => adminApi.getUsers(params),
+  })
+}
+
+/** Legacy: returns users array for backward compatibility */
+export function useAdminUsersLegacy() {
+  const q = useAdminUsers()
+  const data = q.data
+  const users = Array.isArray(data?.data) ? data.data : (data as { data?: unknown[] } | undefined)?.data ?? []
+  return { ...q, data: users }
+}
+
+export function useTeams() {
+  return useQuery({
+    queryKey: adminKeys.teams,
+    queryFn: adminApi.getTeams,
   })
 }
 
 export function useInviteUser() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ email, role }: { email: string; role: string }) =>
-      adminApi.inviteUser(email, role),
+    mutationFn: (payload: { email: string; role: string; teamId?: string | null; notes?: string }) =>
+      adminApi.inviteUser(payload),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: adminKeys.users })
-      qc.invalidateQueries({ queryKey: adminKeys.auditLogs })
+      qc.invalidateQueries({ queryKey: adminKeys.users(undefined) })
+      qc.invalidateQueries({ queryKey: adminKeys.auditLogs(undefined) })
       toast.success('Invitation sent successfully')
     },
     onError: (err: Error) => {
       toast.error(err?.message ?? 'Failed to invite user')
+    },
+  })
+}
+
+export function useUpdateUser() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      userId,
+      payload,
+    }: {
+      userId: string
+      payload: { role?: string; status?: 'active' | 'inactive'; teamId?: string | null }
+    }) => adminApi.updateUser(userId, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminKeys.users(undefined) })
+      qc.invalidateQueries({ queryKey: adminKeys.auditLogs(undefined) })
+      toast.success('User updated successfully')
+    },
+    onError: (err: Error) => {
+      toast.error(err?.message ?? 'Failed to update user')
     },
   })
 }
@@ -94,8 +141,8 @@ export function useActivateDeactivateUser() {
     mutationFn: ({ userId, action }: { userId: string; action: 'activate' | 'deactivate' }) =>
       adminApi.activateDeactivateUser(userId, action),
     onSuccess: (_, { action }) => {
-      qc.invalidateQueries({ queryKey: adminKeys.users })
-      qc.invalidateQueries({ queryKey: adminKeys.auditLogs })
+      qc.invalidateQueries({ queryKey: adminKeys.users(undefined) })
+      qc.invalidateQueries({ queryKey: adminKeys.auditLogs(undefined) })
       toast.success(`User ${action === 'activate' ? 'activated' : 'deactivated'} successfully`)
     },
     onError: (err: Error) => {
@@ -104,10 +151,46 @@ export function useActivateDeactivateUser() {
   })
 }
 
-export function useAuditLogs() {
+export function useAuditLogs(params?: {
+  userId?: string
+  actionType?: string
+  from?: string
+  to?: string
+  limit?: number
+  offset?: number
+}) {
   return useQuery({
-    queryKey: adminKeys.auditLogs,
-    queryFn: adminApi.getAuditLogs,
+    queryKey: adminKeys.auditLogs(params),
+    queryFn: () => adminApi.getAuditLogs(params),
+  })
+}
+
+/** Legacy: returns audit logs array for backward compatibility */
+export function useAuditLogsLegacy() {
+  const q = useAuditLogs()
+  const data = q.data
+  const logs = Array.isArray(data?.data) ? data.data : (data as { data?: unknown[] } | undefined)?.data ?? []
+  return { ...q, data: logs }
+}
+
+export function useIngestionReplays() {
+  return useQuery({
+    queryKey: adminKeys.ingestionReplays,
+    queryFn: adminApi.getIngestionReplays,
+  })
+}
+
+export function useHealth() {
+  return useQuery({
+    queryKey: adminKeys.health,
+    queryFn: adminApi.getHealth,
+  })
+}
+
+export function useSubscriptions() {
+  return useQuery({
+    queryKey: adminKeys.subscriptions,
+    queryFn: adminApi.getSubscriptions,
   })
 }
 

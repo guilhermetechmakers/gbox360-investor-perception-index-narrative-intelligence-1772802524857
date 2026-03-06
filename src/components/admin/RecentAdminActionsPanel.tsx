@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AuditLogCard } from './AuditLogCard'
-import { useAuditLogs } from '@/hooks/use-admin'
+import { useAuditLogsLegacy } from '@/hooks/use-admin'
 import { FileText } from 'lucide-react'
+import type { AuditLog } from '@/types/admin'
 
 export function RecentAdminActionsPanel() {
-  const { data: logs = [], isLoading } = useAuditLogs()
+  const { data: logs = [], isLoading } = useAuditLogsLegacy()
   const safeLogs = Array.isArray(logs) ? logs.slice(0, 5) : []
 
   return (
@@ -41,7 +42,7 @@ export function RecentAdminActionsPanel() {
           </div>
         ) : (
           <div className="space-y-3">
-            {safeLogs.map((log) => (
+            {(safeLogs as AuditLog[]).map((log) => (
               <AuditLogCard key={log?.id ?? ''} log={log} />
             ))}
           </div>

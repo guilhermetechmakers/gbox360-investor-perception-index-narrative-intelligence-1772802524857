@@ -1,25 +1,9 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Table,
   TableBody,
@@ -30,6 +14,13 @@ import {
   TableEmpty,
   TableLoading,
 } from '@/components/ui/table'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,73 +33,74 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AnimatedPage } from '@/components/AnimatedPage'
-import { AuditLogCard } from '@/components/admin'
+import {
+  InviteUserModal,
+  EditUserModal,
+  AuditLogViewer,
+} from '@/components/admin'
 import {
   useAdminUsers,
-  useInviteUser,
+  useTeams,
   useActivateDeactivateUser,
-  useAuditLogs,
 } from '@/hooks/use-admin'
-import { UserPlus, Search, UserX, UserCheck } from 'lucide-react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import { UserPlus, Search, UserX, UserCheck, Pencil, MoreHorizontal } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import type { User, Team } from '@/types/admin'
 
-const inviteSchema = z.object({
-  email: z.string().email('Invalid email'),
-  role: z.enum(['admin', 'standard']),
-})
-
-type InviteFormValues = z.infer<typeof inviteSchema>
+const ROLES = ['admin', 'moderator', 'support', 'viewer', 'standard'] as const
+const STATUSES = ['active', 'inactive'] as const
+const PAGE_SIZE = 10
 
 export default function UserManagement() {
   const [search, setSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [teamFilter, setTeamFilter] = useState<string>('all')
+  const [page, setPage] = useState(0)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [editUser, setEditUser] = useState<User | null>(null)
+  const [editOpen, setEditOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deactivateUserId, setDeactivateUserId] = useState<string | null>(null)
   const [activateUserId, setActivateUserId] = useState<string | null>(null)
 
-  const { data: users = [], isLoading: usersLoading } = useAdminUsers()
-  const { data: auditLogs = [], isLoading: logsLoading } = useAuditLogs()
-  const inviteUser = useInviteUser()
-  const activateDeactivate = useActivateDeactivateUser()
-
-  const safeUsers = Array.isArray(users) ? users : []
-  const safeLogs = Array.isArray(auditLogs) ? auditLogs : []
-
-  const filteredUsers = useMemo(() => {
-    if (!search.trim()) return safeUsers
-    const q = search.toLowerCase()
-    return safeUsers.filter(
-      (u) =>
-        (u?.email ?? '').toLowerCase().includes(q) ||
-        (u?.name ?? '').toLowerCase().includes(q)
-    )
-  }, [safeUsers, search])
-
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    formState: { errors },
-    reset,
-  } = useForm<InviteFormValues>({
-    resolver: zodResolver(inviteSchema),
-    defaultValues: { email: '', role: 'standard' },
+  const { data: usersResponse, isLoading: usersLoading } = useAdminUsers({
+    search: search.trim() || undefined,
+    role: roleFilter !== 'all' ? roleFilter : undefined,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    teamId: teamFilter !== 'all' ? teamFilter : undefined,
+    page,
+    pageSize: PAGE_SIZE,
   })
 
-  const roleValue = watch('role')
+  const { data: teams = [] } = useTeams()
+  const safeTeams = Array.isArray(teams) ? teams : []
+  const activateDeactivate = useActivateDeactivateUser()
 
-  const onInvite = (data: InviteFormValues) => {
-    inviteUser.mutate(
-      { email: data.email, role: data.role },
-      {
-        onSuccess: () => {
-          reset()
-          setInviteOpen(false)
-        },
-      }
-    )
+  const users = Array.isArray(usersResponse?.data) ? usersResponse.data : []
+  const totalCount = typeof usersResponse?.count === 'number' ? usersResponse.count : users.length
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(new Set(users.map((u) => u?.id ?? '').filter(Boolean)))
+    } else {
+      setSelectedIds(new Set())
+    }
+  }
+
+  const handleSelectOne = (id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(id)
+      else next.delete(id)
+      return next
+    })
   }
 
   const handleDeactivate = (userId: string) => {
@@ -125,121 +117,157 @@ export default function UserManagement() {
     )
   }
 
+  const openEdit = (user: User) => {
+    setEditUser(user)
+    setEditOpen(true)
+  }
+
+  const allSelected = users.length > 0 && selectedIds.size === users.length
+  const someSelected = selectedIds.size > 0
+
   return (
     <AnimatedPage className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <h1 className="font-serif text-2xl font-semibold text-foreground">
           User management
         </h1>
-        <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <UserPlus className="mr-2 h-4 w-4" />
-              Invite user
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Invite user</DialogTitle>
-              <DialogDescription>
-                Send an invitation to join the platform. They will receive an email with signup instructions.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit(onInvite)} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="invite-email">Email</Label>
-                <Input
-                  id="invite-email"
-                  type="email"
-                  placeholder="user@example.com"
-                  {...register('email')}
-                />
-                {errors.email && (
-                  <p className="text-xs text-destructive">{errors.email.message}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="invite-role">Role</Label>
-                <Select
-                  value={roleValue}
-                  onValueChange={(v) => setValue('role', v as 'admin' | 'standard')}
-                >
-                  <SelectTrigger id="invite-role">
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="standard">Standard</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setInviteOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={inviteUser.isPending}>
-                  {inviteUser.isPending ? 'Sending...' : 'Send invitation'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button
+          size="sm"
+          className="rounded-full bg-[#111111] text-white hover:bg-[#2B2B2B]"
+          onClick={() => setInviteOpen(true)}
+        >
+          <UserPlus className="mr-2 h-4 w-4" />
+          Invite user
+        </Button>
       </div>
 
       <Tabs defaultValue="users" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="users">Users</TabsTrigger>
-          <TabsTrigger value="audit">Audit log</TabsTrigger>
+        <TabsList className="rounded-lg bg-muted/60 p-1">
+          <TabsTrigger value="users" className="rounded-md">
+            Users
+          </TabsTrigger>
+          <TabsTrigger value="audit" className="rounded-md">
+            Audit log
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="users" className="space-y-4">
           <Card className="rounded-card">
             <CardHeader>
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
                 <CardTitle className="font-serif text-lg">Users</CardTitle>
-                <div className="relative flex-1 sm:max-w-sm">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <div className="relative flex-1 sm:max-w-xs">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
                   <Input
                     placeholder="Search users..."
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9"
+                    onChange={(e) => {
+                      setSearch(e.target.value)
+                      setPage(0)
+                    }}
+                    className="pl-9 rounded-lg"
+                    aria-label="Search users"
                   />
                 </div>
+                <div className="flex flex-wrap gap-2">
+                  <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v); setPage(0) }}>
+                    <SelectTrigger className="w-[130px] rounded-lg">
+                      <SelectValue placeholder="Role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All roles</SelectItem>
+                      {ROLES.map((r) => (
+                        <SelectItem key={r} value={r}>{r}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(0) }}>
+                    <SelectTrigger className="w-[130px] rounded-lg">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All status</SelectItem>
+                      {STATUSES.map((s) => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={teamFilter} onValueChange={(v) => { setTeamFilter(v); setPage(0) }}>
+                    <SelectTrigger className="w-[140px] rounded-lg">
+                      <SelectValue placeholder="Team" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All teams</SelectItem>
+                      {(safeTeams as Team[]).map((t) => (
+                        <SelectItem key={t?.id ?? ''} value={t?.id ?? ''}>{t?.name ?? '—'}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
+              {someSelected && (
+                <div className="flex items-center gap-2 pt-2 border-t border-border/60 mt-2">
+                  <span className="text-sm text-muted-foreground">
+                    {selectedIds.size} selected
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedIds(new Set())}
+                    className="rounded-full"
+                  >
+                    Clear
+                  </Button>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               <Table aria-label="Users list">
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allSelected}
+                        onCheckedChange={handleSelectAll}
+                        aria-label="Select all users"
+                      />
+                    </TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Role</TableHead>
+                    <TableHead>Team</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {usersLoading ? (
-                    <TableLoading columnCount={5} rowCount={5} />
-                  ) : filteredUsers.length === 0 ? (
+                    <TableLoading columnCount={8} rowCount={5} />
+                  ) : users.length === 0 ? (
                     <TableEmpty
-                      colSpan={5}
+                      colSpan={8}
                       message="No users found"
                       description="Invite users to get started."
                       actionLabel="Invite user"
                       onAction={() => setInviteOpen(true)}
                     />
                   ) : (
-                    filteredUsers.map((user) => (
+                    users.map((user) => (
                       <TableRow key={user?.id ?? ''}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedIds.has(user?.id ?? '')}
+                            onCheckedChange={(c) => handleSelectOne(user?.id ?? '', !!c)}
+                            aria-label={`Select ${user?.email ?? 'user'}`}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">{user?.email ?? '—'}</TableCell>
-                        <TableCell>{user?.name ?? '—'}</TableCell>
+                        <TableCell>{user?.name ?? user?.display_name ?? '—'}</TableCell>
                         <TableCell>
                           <Badge variant="secondary">{user?.role ?? '—'}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {(safeTeams as Team[]).find((t) => t?.id === user?.team_id)?.name ?? '—'}
                         </TableCell>
                         <TableCell>
                           <Badge
@@ -250,68 +278,84 @@ export default function UserManagement() {
                             {user?.status ?? '—'}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-muted-foreground text-xs">
+                          {user?.createdAt
+                            ? new Date(user.createdAt).toLocaleDateString()
+                            : '—'}
+                        </TableCell>
                         <TableCell className="text-right">
-                          {user?.status === 'active' ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setDeactivateUserId(user?.id ?? '')}
-                            >
-                              <UserX className="mr-1 h-4 w-4" />
-                              Deactivate
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setActivateUserId(user?.id ?? '')}
-                            >
-                              <UserCheck className="mr-1 h-4 w-4" />
-                              Activate
-                            </Button>
-                          )}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" aria-label="Actions">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEdit(user)}>
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
+                              {user?.status === 'active' ? (
+                                <DropdownMenuItem
+                                  onClick={() => setDeactivateUserId(user?.id ?? '')}
+                                  className="text-destructive"
+                                >
+                                  <UserX className="mr-2 h-4 w-4" />
+                                  Deactivate
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  onClick={() => setActivateUserId(user?.id ?? '')}
+                                >
+                                  <UserCheck className="mr-2 h-4 w-4" />
+                                  Activate
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                     ))
                   )}
                 </TableBody>
               </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="audit" className="space-y-4">
-          <Card className="rounded-card">
-            <CardHeader>
-              <CardTitle className="font-serif text-lg">Audit log</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Recent admin actions and user management events.
-              </p>
-            </CardHeader>
-            <CardContent>
-              {logsLoading ? (
-                <div className="space-y-3">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="h-20 animate-pulse rounded-lg bg-muted/40" />
-                  ))}
-                </div>
-              ) : safeLogs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-4 py-12 text-center">
-                  <p className="font-medium text-foreground">No audit entries yet</p>
+              {totalPages > 1 && (
+                <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-4">
                   <p className="text-sm text-muted-foreground">
-                    Admin actions will appear here when they occur.
+                    Page {page + 1} of {totalPages} · {totalCount} total
                   </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {safeLogs.map((log) => (
-                    <AuditLogCard key={log?.id ?? ''} log={log} />
-                  ))}
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage((p) => Math.max(0, p - 1))}
+                      disabled={page === 0}
+                      className="rounded-full"
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                      disabled={page >= totalPages - 1}
+                      className="rounded-full"
+                    >
+                      Next
+                    </Button>
+                  </div>
                 </div>
               )}
             </CardContent>
           </Card>
         </TabsContent>
+        <TabsContent value="audit" className="space-y-4">
+          <AuditLogViewer />
+        </TabsContent>
       </Tabs>
+
+      <InviteUserModal open={inviteOpen} onOpenChange={setInviteOpen} />
+      <EditUserModal open={editOpen} onOpenChange={setEditOpen} user={editUser} />
 
       <AlertDialog
         open={!!deactivateUserId}
