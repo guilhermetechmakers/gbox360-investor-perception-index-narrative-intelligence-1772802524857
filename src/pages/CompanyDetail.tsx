@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   LineChart,
@@ -12,13 +13,34 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useCompany } from '@/hooks/use-companies'
 import { useIPISnapshot, useIPITimeSeries } from '@/hooks/use-ipi'
 import { useNarrativesList } from '@/hooks/use-narratives'
 import { AnimatedPage } from '@/components/AnimatedPage'
+import { ExportAuditButton } from '@/components/dashboard'
+import { TIME_WINDOWS } from '@/types/dashboard'
 import { format, subDays } from 'date-fns'
-import { Download, FileText, MessageSquare, AlertCircle } from 'lucide-react'
+import { FileText, MessageSquare, AlertCircle } from 'lucide-react'
 import type { Narrative } from '@/types/narrative'
+
+function getDateRangeForWindow(key: string): { start: string; end: string } {
+  const end = new Date()
+  let start: Date
+  if (key === '7d') start = subDays(end, 7)
+  else if (key === 'ytd') start = new Date(end.getFullYear(), 0, 1)
+  else start = subDays(end, 30)
+  return {
+    start: format(start, 'yyyy-MM-dd'),
+    end: format(end, 'yyyy-MM-dd'),
+  }
+}
 
 /** Empty state for narratives list: icon, message, description, optional CTA */
 function NarrativesEmptyState() {
@@ -52,8 +74,8 @@ function NarrativesEmptyState() {
 export default function CompanyDetail() {
   const { companyId } = useParams<{ companyId: string }>()
   const id = companyId ?? ''
-  const endDate = format(new Date(), 'yyyy-MM-dd')
-  const startDate = format(subDays(new Date(), 30), 'yyyy-MM-dd')
+  const [timeWindow, setTimeWindow] = useState('30d')
+  const { start: startDate, end: endDate } = getDateRangeForWindow(timeWindow)
 
   const { data: company, isLoading: companyLoading } = useCompany(id)
   const { data: snapshot, isLoading: snapshotLoading } = useIPISnapshot(
@@ -71,6 +93,15 @@ export default function CompanyDetail() {
     startDate,
     endDate
   )
+
+  const exportDataset = useMemo(() => {
+    const items: unknown[] = []
+    if (snapshot) items.push({ type: 'ipi', ...snapshot })
+    for (const n of narratives ?? []) {
+      items.push({ type: 'narrative', ...n })
+    }
+    return items
+  }, [snapshot, narratives])
 
   const series = (timeSeries ?? []).map((p) => ({
     date: format(new Date(p.date), 'MMM d'),
@@ -95,10 +126,25 @@ export default function CompanyDetail() {
             <p className="text-sm text-muted-foreground">{company.sector}</p>
           )}
         </div>
-        <Button variant="outline" size="sm" aria-label="Export audit artifact">
-          <Download className="mr-2 h-4 w-4" aria-hidden />
-          Export audit artifact
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={timeWindow} onValueChange={setTimeWindow}>
+            <SelectTrigger className="w-[140px]" aria-label="Time window">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TIME_WINDOWS.map((w) => (
+                <SelectItem key={w.key} value={w.key}>
+                  {w.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <ExportAuditButton
+            dataset={exportDataset}
+            companyName={company?.name}
+            timeWindow={timeWindow}
+          />
+        </div>
       </div>
 
       {snapshotLoading ? (

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -56,6 +56,7 @@ function App() {
 
           <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
+            <Route path="companies" element={<Navigate to="/dashboard" replace />} />
             <Route path="companies/:companyId" element={<CompanyDetail />} />
             <Route path="companies/:companyId/narratives/:narrativeId" element={<NarrativeDrillDown />} />
             <Route path="profile" element={<Profile />} />
