@@ -10,6 +10,7 @@ import { QuickSearchBar } from './QuickSearchBar'
 import { FilterBar } from './FilterBar'
 import { ExportAuditButton } from './ExportAuditButton'
 import { EmptyState } from './EmptyState'
+import { DashboardSummaryCard } from './DashboardSummaryCard'
 import {
   Select,
   SelectContent,
@@ -199,13 +200,25 @@ export function DashboardContainer({
         />
       ) : (
         <>
-          <IPIOverviewCard
-            ipiScore={ipi?.score}
-            delta={ipi?.delta}
-            lastUpdated={ipi?.lastUpdated}
-            sparklineData={sparklineData}
-            isLoading={isLoading}
-          />
+          <div className="space-y-4">
+            <IPIOverviewCard
+              ipiScore={ipi?.score}
+              delta={ipi?.delta}
+              lastUpdated={ipi?.lastUpdated}
+              sparklineData={sparklineData}
+              isLoading={isLoading}
+            />
+            {effectiveCompanyId && (
+              <DashboardSummaryCard
+                companyId={effectiveCompanyId}
+                companyName={selectedCompany?.name}
+                window={timeWindow}
+                currentIpi={ipi?.score ?? 0}
+                delta={ipi?.delta ?? 0}
+                topNarratives={topNarratives}
+              />
+            )}
+          </div>
 
           <div className="grid gap-6 md:grid-cols-2">
             <TopNarrativesPanel

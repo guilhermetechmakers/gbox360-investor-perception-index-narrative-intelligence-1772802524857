@@ -1,34 +1,22 @@
 import { useState, useMemo } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { useParams } from 'react-router-dom'
+import { format, subDays } from 'date-fns'
 import { useCompany } from '@/hooks/use-companies'
 import { useIPISnapshot, useIPITimeSeries } from '@/hooks/use-ipi'
 import { useNarrativesList } from '@/hooks/use-narratives'
 import { AnimatedPage } from '@/components/AnimatedPage'
 import { ExportAuditButton } from '@/components/dashboard'
-import { TIME_WINDOWS } from '@/types/dashboard'
-import { format, subDays } from 'date-fns'
-import { FileText, MessageSquare, AlertCircle } from 'lucide-react'
-import type { Narrative } from '@/types/narrative'
+import {
+  CompanyDetailIPIHeader,
+  IPIBreakdownPanel,
+  NarrativeTimeline,
+  NarrativeList,
+  TimeWindowPicker,
+  ComparePanel,
+  SearchFilterBar,
+  RawPayloadModal,
+} from '@/components/company-detail'
+import type { SearchFilterBarFilters } from '@/components/company-detail'
 
 function getDateRangeForWindow(key: string): { start: string; end: string } {
   const end = new Date()
@@ -42,39 +30,19 @@ function getDateRangeForWindow(key: string): { start: string; end: string } {
   }
 }
 
-/** Empty state for narratives list: icon, message, description, optional CTA */
-function NarrativesEmptyState() {
-  return (
-    <div
-      className="flex flex-col items-center justify-center gap-4 rounded-lg border border-border bg-muted/20 py-12 px-4 text-center"
-      role="status"
-      aria-label="No narratives in this time window"
-    >
-      <div
-        className="flex h-14 w-14 items-center justify-center rounded-full bg-muted/60 text-muted-foreground"
-        aria-hidden
-      >
-        <MessageSquare className="h-7 w-7" />
-      </div>
-      <div className="space-y-1 max-w-sm">
-        <p className="font-medium text-foreground">No narratives yet</p>
-        <p className="text-sm text-muted-foreground">
-          No narrative events match the selected company and time window. Try a different date range or check back after more data is ingested.
-        </p>
-      </div>
-      <Link to="/dashboard">
-        <Button variant="outline" size="sm" aria-label="Go to dashboard to change company or time window">
-          Back to dashboard
-        </Button>
-      </Link>
-    </div>
-  )
-}
-
 export default function CompanyDetail() {
   const { companyId } = useParams<{ companyId: string }>()
   const id = companyId ?? ''
   const [timeWindow, setTimeWindow] = useState('30d')
+  const [compareEnabled, setCompareEnabled] = useState(false)
+  const [rawPayloadEventId, setRawPayloadEventId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchFilters, setSearchFilters] = useState<SearchFilterBarFilters>({
+    timeWindow: '30d',
+    source: 'all',
+    role: 'all',
+  })
+
   const { start: startDate, end: endDate } = getDateRangeForWindow(timeWindow)
 
   const { data: company, isLoading: companyLoading } = useCompany(id)
@@ -88,11 +56,63 @@ export default function CompanyDetail() {
     startDate,
     endDate
   )
-  const { data: narratives, isLoading: narrativesLoading, isError: narrativesError, error: narrativesErrorDetail } = useNarrativesList(
+  const { data: narratives, isLoading: narrativesLoading } = useNarrativesList(
     id,
     startDate,
     endDate
   )
+
+  const windowRange = { start: startDate, end: endDate }
+
+  const timelineData = useMemo(() => {
+    const series = timeSeries ?? []
+    return Array.isArray(series)
+      ? series.map((p) => ({
+          date: p.date,
+          score: p.score,
+          narrative: p.narrative,
+          credibility: p.credibility,
+          risk: p.risk,
+        }))
+      : []
+  }, [timeSeries])
+
+  const filteredNarratives = useMemo(() => {
+    const list = narratives ?? []
+    if (!Array.isArray(list)) return []
+    let out = list
+    const q = (searchQuery ?? '').trim().toLowerCase()
+    if (q) {
+      out = out.filter((n) => {
+        const summary = (n?.summary ?? '').toLowerCase()
+        const topic = (n?.topic ?? '').toLowerCase()
+        const events = n?.events ?? []
+        const eventText = events
+          .map((e) => (e?.rawText ?? e?.source ?? '').toLowerCase())
+          .join(' ')
+        return summary.includes(q) || topic.includes(q) || eventText.includes(q)
+      })
+    }
+    const src = searchFilters.source ?? 'all'
+    const role = searchFilters.role ?? 'all'
+    if (src !== 'all') {
+      out = out.filter((n) => {
+        const events = n?.events ?? []
+        return events.some(
+          (e) => (e?.source ?? '').toLowerCase().includes(src.toLowerCase())
+        )
+      })
+    }
+    if (role !== 'all') {
+      out = out.filter((n) => {
+        const events = n?.events ?? []
+        return events.some(
+          (e) => (e?.speakerRole ?? '').toLowerCase().includes(role.toLowerCase())
+        )
+      })
+    }
+    return out
+  }, [narratives, searchQuery, searchFilters.source, searchFilters.role])
 
   const exportDataset = useMemo(() => {
     const items: unknown[] = []
@@ -103,42 +123,65 @@ export default function CompanyDetail() {
     return items
   }, [snapshot, narratives])
 
-  const series = (timeSeries ?? []).map((p) => ({
-    date: format(new Date(p.date), 'MMM d'),
-    score: p.score,
-    narrative: p.narrative,
-    credibility: p.credibility,
-    risk: p.risk,
-  }))
+  const currentStats = useMemo(
+    () => ({
+      currentIpi: snapshot?.score ?? 0,
+      delta: snapshot?.delta ?? 0,
+      breakdown: {
+        narrative: snapshot?.breakdown?.narrative ?? 0,
+        credibility: snapshot?.breakdown?.credibility ?? 0,
+        risk: snapshot?.breakdown?.risk ?? 0,
+      },
+    }),
+    [snapshot]
+  )
+
+  const previousStats = useMemo((): { currentIpi: number; delta: number; breakdown: { narrative: number; credibility: number; risk: number } } | undefined => {
+    if (!compareEnabled) return undefined
+    return {
+      currentIpi: (snapshot?.score ?? 0) - (snapshot?.delta ?? 0),
+      delta: 0,
+      breakdown: {
+        narrative: Math.max(0, (snapshot?.breakdown?.narrative ?? 0) - 5),
+        credibility: Math.max(0, (snapshot?.breakdown?.credibility ?? 0) - 3),
+        risk: Math.max(0, (snapshot?.breakdown?.risk ?? 0) - 2),
+      },
+    }
+  }, [compareEnabled, snapshot])
+
+  const handleTimeWindowChange = (key: string, _range?: { start: string; end: string }) => {
+    setTimeWindow(key)
+    setSearchFilters((f) => ({ ...f, timeWindow: key }))
+  }
 
   return (
     <AnimatedPage className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          {companyLoading ? (
-            <Skeleton className="h-8 w-48" />
-          ) : (
-            <h1 className="font-serif text-2xl font-semibold text-foreground">
-              {company?.name ?? 'Company'} {company?.symbol && `(${company.symbol})`}
-            </h1>
-          )}
-          {company?.sector && (
-            <p className="text-sm text-muted-foreground">{company.sector}</p>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Select value={timeWindow} onValueChange={setTimeWindow}>
-            <SelectTrigger className="w-[140px]" aria-label="Time window">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {TIME_WINDOWS.map((w) => (
-                <SelectItem key={w.key} value={w.key}>
-                  {w.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <CompanyDetailIPIHeader
+        companyId={id}
+        companyName={company?.name ?? 'Company'}
+        ticker={company?.symbol}
+        sector={company?.sector}
+        isLoading={companyLoading}
+      />
+
+      <div className="flex flex-col gap-4">
+        <SearchFilterBar
+          query={searchQuery}
+          filters={searchFilters}
+          onQueryChange={setSearchQuery}
+          onFiltersChange={(f) => {
+            setSearchFilters(f)
+            if (f.timeWindow) setTimeWindow(f.timeWindow)
+          }}
+          showTimeFilter={false}
+        />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <TimeWindowPicker
+            currentWindow={timeWindow}
+            onChange={handleTimeWindowChange}
+            compareEnabled={compareEnabled}
+            onCompareToggle={setCompareEnabled}
+          />
           <ExportAuditButton
             dataset={exportDataset}
             companyName={company?.name}
@@ -148,134 +191,45 @@ export default function CompanyDetail() {
       </div>
 
       {snapshotLoading ? (
-        <Skeleton className="h-32 w-full rounded-card" />
+        <div className="h-48 animate-pulse rounded-card bg-muted/30" />
       ) : (
-        <Card className="rounded-card">
-          <CardHeader>
-            <CardTitle className="font-serif text-lg">IPI Breakdown</CardTitle>
-            <CardDescription className="text-muted-foreground">
-              Provisional weights: 40% Narrative / 40% Credibility / 20% Risk
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <p className="text-sm text-muted-foreground">Narrative</p>
-                <p className="font-serif text-2xl font-semibold text-foreground">
-                  {snapshot?.breakdown?.narrative ?? 65}
-                </p>
-                <p className="text-xs text-muted-foreground">40% weight</p>
-              </div>
-              <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <p className="text-sm text-muted-foreground">Credibility</p>
-                <p className="font-serif text-2xl font-semibold text-foreground">
-                  {snapshot?.breakdown?.credibility ?? 58}
-                </p>
-                <p className="text-xs text-muted-foreground">40% weight</p>
-              </div>
-              <div className="rounded-lg border border-border bg-muted/30 p-4">
-                <p className="text-sm text-muted-foreground">Risk</p>
-                <p className="font-serif text-2xl font-semibold text-foreground">
-                  {snapshot?.breakdown?.risk ?? 42}
-                </p>
-                <p className="text-xs text-muted-foreground">20% weight</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <IPIBreakdownPanel
+          narrativePct={snapshot?.breakdown?.narrative ?? 0}
+          credibilityPct={snapshot?.breakdown?.credibility ?? 0}
+          riskPct={snapshot?.breakdown?.risk ?? 0}
+          totals={{
+            narrative: snapshot?.breakdown?.narrative ?? 0,
+            credibility: snapshot?.breakdown?.credibility ?? 0,
+            risk: snapshot?.breakdown?.risk ?? 0,
+          }}
+        />
       )}
 
-      <Card className="rounded-card">
-        <CardHeader>
-          <CardTitle className="font-serif text-lg">IPI timeline</CardTitle>
-          <CardDescription>Time-decayed persistence (last 30 days)</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {seriesLoading ? (
-            <Skeleton className="h-64 w-full" />
-          ) : (
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={series}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} domain={[0, 100]} />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="score"
-                    stroke="rgb(var(--primary))"
-                    strokeWidth={2}
-                    dot={false}
-                    name="IPI"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {compareEnabled && previousStats && (
+        <ComparePanel
+          currentWindowStats={currentStats}
+          previousWindowStats={previousStats}
+        />
+      )}
 
-      <Card className="rounded-card" aria-labelledby="narratives-card-title" aria-describedby="narratives-card-desc">
-        <CardHeader>
-          <CardTitle id="narratives-card-title" className="font-serif text-lg">Narratives</CardTitle>
-          <CardDescription id="narratives-card-desc" className="text-muted-foreground">Expand to see contributing events and raw payload links</CardDescription>
-        </CardHeader>
-        <CardContent
-          aria-busy={narrativesLoading}
-          aria-live="polite"
-          aria-label={narrativesLoading ? 'Loading narratives' : narratives?.length ? `List of ${narratives.length} narratives` : 'No narratives'}
-        >
-          {narrativesLoading ? (
-            <div className="space-y-2" role="status" aria-label="Loading narratives">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-20 w-full rounded-lg" />
-              ))}
-            </div>
-          ) : narrativesError ? (
-            <Alert variant="destructive" className="border-destructive/50 bg-destructive/5">
-              <AlertCircle className="h-4 w-4" aria-hidden />
-              <AlertTitle>Could not load narratives</AlertTitle>
-              <AlertDescription>
-                {narrativesErrorDetail instanceof Error
-                  ? narrativesErrorDetail.message
-                  : 'Something went wrong. Please try again.'}
-              </AlertDescription>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => window.location.reload()}
-                aria-label="Retry loading narratives"
-              >
-                Retry
-              </Button>
-            </Alert>
-          ) : !narratives?.length ? (
-            <NarrativesEmptyState />
-          ) : (
-            <ul className="space-y-2" role="list">
-              {(narratives ?? []).map((n: Narrative) => (
-                <li key={n.id}>
-                  <Link
-                    to={`/dashboard/companies/${id}/narratives/${n.id}`}
-                    className="flex items-center justify-between rounded-lg border border-border p-3 transition-colors hover:bg-muted/50 hover:shadow-card focus-visible:outline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    aria-label={`View narrative: ${n.summary}. ${n.contributionPercent}% contribution, topic ${n.topic}`}
-                  >
-                    <div>
-                      <p className="font-medium text-foreground">{n.summary}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {n.contributionPercent}% contribution · {n.topic}
-                      </p>
-                    </div>
-                    <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <NarrativeTimeline
+        events={timelineData}
+        windowRange={windowRange}
+        isLoading={seriesLoading}
+      />
+
+      <NarrativeList
+        narratives={filteredNarratives}
+        companyId={id}
+        onOpenRawPayload={setRawPayloadEventId}
+        isLoading={narrativesLoading}
+      />
+
+      <RawPayloadModal
+        eventId={rawPayloadEventId}
+        open={!!rawPayloadEventId}
+        onOpenChange={(open) => !open && setRawPayloadEventId(null)}
+      />
     </AnimatedPage>
   )
 }
