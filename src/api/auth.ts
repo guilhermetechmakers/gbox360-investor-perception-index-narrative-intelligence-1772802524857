@@ -6,6 +6,8 @@ import type {
   SignUpInput,
   ResetPasswordInput,
   ConfirmPasswordResetInput,
+  VerifyTokenResponse,
+  ResendTokenResponse,
 } from '@/types/auth'
 
 const useSupabase = !!(
@@ -91,7 +93,7 @@ export const authApi = {
   resetPassword: async (input: ResetPasswordInput): Promise<void> => {
     if (useSupabase && supabase) {
       const { error } = await supabase.auth.resetPasswordForEmail(input.email, {
-        redirectTo: `${window.location.origin}/password-reset`,
+        redirectTo: `${window.location.origin}/reset-password`,
       })
       if (error) throw new Error(error.message)
       return
@@ -111,7 +113,7 @@ export const authApi = {
     }
     await api.post('/auth/reset-password', {
       token: input.token,
-      password: input.newPassword,
+      newPassword: input.newPassword,
     })
   },
 
@@ -146,5 +148,52 @@ export const authApi = {
       success: res?.success ?? false,
       message: (res?.message as string) ?? 'Verification complete',
     }
+  },
+
+  verifyToken: async (
+    userId: string,
+    token: string
+  ): Promise<VerifyTokenResponse> => {
+    if (useSupabase && supabase) {
+      const { error } = await supabase.auth.verifyOtp({
+        token_hash: token,
+        type: 'email',
+      })
+      if (error) {
+        const status = error.message?.toLowerCase().includes('expired')
+          ? 'expired'
+          : 'invalid'
+        return { success: false, status, message: error.message }
+      }
+      return { success: true, status: 'verified', nextSteps: ['dashboard'] }
+    }
+    const res = await api.post<VerifyTokenResponse>('/auth/verify-token', {
+      userId,
+      token,
+    })
+    return {
+      success: res?.success ?? false,
+      status: (res?.status as VerifyTokenResponse['status']) ?? 'invalid',
+      message: res?.message,
+      nextSteps: Array.isArray(res?.nextSteps) ? res.nextSteps : [],
+    }
+  },
+
+  resendToken: async (userId?: string): Promise<ResendTokenResponse> => {
+    if (useSupabase && supabase) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user?.email) throw new Error('No user session. Please sign in again.')
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: user.email,
+      })
+      if (error) throw new Error(error.message)
+      return { success: true, message: 'Verification email sent.' }
+    }
+    if (!userId) throw new Error('User ID is required')
+    const res = await api.post<ResendTokenResponse>('/auth/resend-token', {
+      userId,
+    })
+    return res
   },
 }

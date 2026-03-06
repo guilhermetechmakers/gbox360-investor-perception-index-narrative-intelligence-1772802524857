@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import {
   AuthLayout,
   AuthLayoutCard,
-  ErrorBanner,
+  ErrorDisplay,
   ValidationMessage,
   PasswordStrengthMeter,
   TokenPresenceIndicator,
@@ -102,7 +102,7 @@ export function PasswordResetTokenForm({
           <TokenPresenceIndicator hasToken={!!token?.trim()} isRecoveryFlow={isRecoveryFlow} />
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <ErrorBanner
+            <ErrorDisplay
               message={confirmReset.error?.message ?? ''}
               onDismiss={() => confirmReset.reset()}
             />
@@ -115,6 +115,7 @@ export function PasswordResetTokenForm({
                 autoComplete="new-password"
                 aria-invalid={!!errors.newPassword}
                 aria-describedby="password-strength"
+                className="rounded-lg border-black/8"
                 {...register('newPassword')}
               />
               <div id="password-strength">
@@ -129,6 +130,7 @@ export function PasswordResetTokenForm({
                 type="password"
                 autoComplete="new-password"
                 aria-invalid={!!errors.confirmPassword}
+                className="rounded-lg border-black/8"
                 {...register('confirmPassword')}
               />
               <ValidationMessage message={errors.confirmPassword?.message} />
@@ -136,7 +138,7 @@ export function PasswordResetTokenForm({
             <Button
               type="submit"
               size="lg"
-              className="w-full rounded-full"
+              className="w-full rounded-full bg-primary text-primary-foreground"
               disabled={confirmReset.isPending}
             >
               {confirmReset.isPending ? 'Updating...' : 'Update password'}

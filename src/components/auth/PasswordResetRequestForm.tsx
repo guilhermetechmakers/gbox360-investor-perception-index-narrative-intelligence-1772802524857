@@ -11,7 +11,7 @@ import {
   EmailValidationHelper,
   SecurityTipsCard,
   BackToLoginLink,
-  ErrorBanner,
+  ErrorDisplay,
 } from '@/components/auth'
 import { authApi } from '@/api/auth'
 import { useMutation } from '@tanstack/react-query'
@@ -24,7 +24,12 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-export function PasswordResetRequestForm() {
+export interface PasswordResetRequestFormProps {
+  /** Optional custom submit handler; when provided, called with email instead of default API */
+  onSubmit?: (email: string) => void | Promise<void>
+}
+
+export function PasswordResetRequestForm({ onSubmit: onSubmitProp }: PasswordResetRequestFormProps = {}) {
   const requestReset = useMutation({
     mutationFn: authApi.resetPassword,
     onSuccess: () => {
@@ -44,7 +49,17 @@ export function PasswordResetRequestForm() {
 
   const email = useWatch({ control, name: 'email', defaultValue: '' })
 
-  const onSubmit = (data: FormValues) => requestReset.mutate({ email: data.email })
+  const onSubmit = (data: FormValues) => {
+    if (onSubmitProp) {
+      void Promise.resolve(onSubmitProp(data.email))
+      return
+    }
+    requestReset.mutate({ email: data.email })
+  }
+
+  const isSubmitting = onSubmitProp ? false : requestReset.isPending
+  const errorMessage = onSubmitProp ? '' : (requestReset.error?.message ?? '')
+  const isSuccess = onSubmitProp ? false : requestReset.isSuccess
 
   return (
     <AuthLayout>
@@ -59,11 +74,11 @@ export function PasswordResetRequestForm() {
             </p>
           </div>
 
-          {requestReset.isSuccess && (
+          {isSuccess && (
             <div
               role="status"
               aria-live="polite"
-              className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-800 dark:text-emerald-200"
+              className="rounded-xl border border-black/8 bg-cardPastel-sage/30 p-4 text-sm text-foreground"
             >
               If an account exists for this email, you&apos;ll receive a password reset link shortly.
               Check your inbox and spam folder.
@@ -71,8 +86,8 @@ export function PasswordResetRequestForm() {
           )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <ErrorBanner
-              message={requestReset.error?.message ?? ''}
+            <ErrorDisplay
+              message={errorMessage}
               onDismiss={() => requestReset.reset()}
             />
             <div className="space-y-2">
@@ -84,6 +99,7 @@ export function PasswordResetRequestForm() {
                 autoComplete="email"
                 aria-invalid={!!errors.email}
                 aria-describedby="reset-email-helper"
+                className="rounded-lg border-black/8"
                 {...register('email')}
               />
               <EmailValidationHelper email={email ?? ''} />
@@ -93,11 +109,14 @@ export function PasswordResetRequestForm() {
             <Button
               type="submit"
               size="lg"
-              className="w-full rounded-full"
-              disabled={requestReset.isPending}
+              className="w-full rounded-full bg-primary text-primary-foreground"
+              disabled={isSubmitting}
             >
-              {requestReset.isPending ? 'Sending...' : 'Send reset link'}
+              {isSubmitting ? 'Sending...' : 'Send reset link'}
             </Button>
+            <p className="text-xs text-muted-foreground">
+              Reset link usually arrives within a few minutes. Check your spam folder if you don&apos;t see it.
+            </p>
           </form>
 
           <SecurityTipsCard variant="request" />

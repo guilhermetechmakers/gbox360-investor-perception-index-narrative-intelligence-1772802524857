@@ -7,7 +7,8 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import Landing from '@/pages/Landing'
 import Login from '@/pages/Login'
 import Signup from '@/pages/Signup'
-import PasswordReset from '@/pages/PasswordReset'
+import PasswordResetRequestPage from '@/pages/PasswordResetRequestPage'
+import PasswordResetConfirmPage from '@/pages/PasswordResetConfirmPage'
 import EmailVerification from '@/pages/EmailVerification'
 import Dashboard from '@/pages/Dashboard'
 import CompanyDetail from '@/pages/CompanyDetail'
@@ -44,9 +45,9 @@ function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
-          <Route path="/password-reset" element={<PasswordReset />} />
-          <Route path="/reset-password" element={<PasswordReset />} />
-          <Route path="/reset-password" element={<PasswordReset />} />
+          <Route path="/password-reset" element={<PasswordResetRequestPage />} />
+          <Route path="/reset-password" element={<PasswordResetConfirmPage />} />
+          <Route path="/verify" element={<EmailVerification />} />
           <Route path="/email-verification" element={<EmailVerification />} />
           <Route path="/about" element={<About />} />
           <Route path="/500" element={<Error500 />} />

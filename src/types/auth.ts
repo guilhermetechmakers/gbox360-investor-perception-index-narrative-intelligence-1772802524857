@@ -40,3 +40,23 @@ export interface VerifyEmailResponse {
   success: boolean
   message: string
 }
+
+export interface VerifyTokenResponse {
+  success: boolean
+  status: 'verified' | 'pending' | 'expired' | 'invalid'
+  message?: string
+  nextSteps?: string[]
+}
+
+export interface ResendTokenResponse {
+  success: boolean
+  message: string
+  token?: string
+  expiresAt?: string
+}
+
+export interface ProfileStatusResponse {
+  isComplete: boolean
+  onboardingStage: string
+  fieldsCompletedCount: number
+}

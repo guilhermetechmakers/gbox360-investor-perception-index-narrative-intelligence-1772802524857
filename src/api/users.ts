@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import { api } from '@/lib/api'
 import type { User, UpdateUserInput } from '@/types/user'
+import type { ProfileStatusResponse } from '@/types/auth'
 
 const useSupabase = !!(
   import.meta.env.VITE_SUPABASE_URL &&
@@ -47,4 +48,34 @@ export const usersApi = {
   },
   getById: async (id: string): Promise<User> =>
     api.get<User>(`/users/${id}`),
+
+  getProfileStatus: async (userId?: string): Promise<ProfileStatusResponse> => {
+    if (useSupabase && supabase) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        return {
+          isComplete: false,
+          onboardingStage: 'signup',
+          fieldsCompletedCount: 0,
+        }
+      }
+      const hasEmail = !!user.email
+      const hasName = !!(
+        (user.user_metadata?.full_name as string) ??
+        (user.user_metadata?.name as string)
+      )
+      const fieldsCompletedCount = [hasEmail, hasName].filter(Boolean).length
+      return {
+        isComplete: hasEmail && hasName,
+        onboardingStage: hasEmail && hasName ? 'complete' : 'profile',
+        fieldsCompletedCount,
+      }
+    }
+    const params = userId ? { userId } : undefined
+    const res = await api.get<ProfileStatusResponse>(
+      '/user/profile-status',
+      params as Record<string, string> | undefined
+    )
+    return res
+  },
 }
