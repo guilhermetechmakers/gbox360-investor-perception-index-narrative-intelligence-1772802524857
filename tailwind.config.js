@@ -44,6 +44,11 @@ export default {
           wheat: '#D8C9B0',
           blush: '#E6C9C2',
         },
+        /* Landing page section backgrounds (Gbox360 UI spec) */
+        'soft-taupe': '#E8DED3',
+        'sage-olive': '#C8D4C0',
+        'sand-khaki': '#D8C9B0',
+        'mauve-beige': '#E6C9C2',
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
