@@ -1313,234 +1313,261 @@ When implementing this project:
 ---
 
 **Remember: Always reference this file for design decisions. Do not use generic or placeholder designs.**
- for bestpractices and # Password Reset
+ for bestpractices and # Email Verification
 
 ## Overview
-This prompt guides an AI development tool to implement a robust, secure, and user-friendly Password Reset flow within a larger authentication ecosystem. It covers two related UX tracks: (1) Requesting a password reset (email-based initiation) and (2) Confirming a reset via a tokenized link (new password with strength validation). The implementation must integrate with the existing Login/Signup flow (including SSO and a primary “Get started”/free trial CTA) and align with the project’s design system, accessibility standards, and runtime safety requirements.
+This prompt guides the AI development tool to build a robust Email Verification experience integrated with transactional email workflows and a cohesive login/signup entry point. The system should securely process verification tokens, display clear verification status after signup, offer token resends, and guide users to the next steps (dashboard, profile completion). It must be resilient, guard against null/undefined values for array-methods, and adhere to the project’s design system, accessibility standards, and runtime safety rules described in the Mandatory Coding Standards.
 
 ## Page Description (Full Detail)
-What the page is:
-- A Password Reset experience that enables users to (a) request a reset by supplying their email, (b) receive a secure tokenized reset link (tokenized with time-bound validity), and (c) confirm the reset by entering a new password and confirming it on the reset page. It must gracefully handle cases where users forget credentials and provide clear UX guidance.
+What this page is:
+- The Email Verification page is the post-sign-up destination that shows the user’s verification status, processes any provided verification tokens, handles token expiry or invalid tokens, and advises the user on subsequent steps (e.g., go to Dashboard, complete profile, or contact support).
 
 Goals:
-- Provide a secure, low-friction password reset flow that minimizes friction for legitimate users while mitigating abuse.
-- Validate email and password inputs with live feedback, including password strength indicators.
-- Ensure reset tokens are validated server-side with appropriate expirations and one-use semantics.
-- Preserve auditability by logging reset events and guaranteeing idempotent, retry-tolerant ingestion in any data integration points (even though the current project’s API surface is not externally API-driven, design should accommodate secure, auditable flows).
+- Accurately reflect verification state: pending (token just issued), success (token verified), expired/invalid (token invalid or expired).
+- Provide a resilient flow for resending the verification email.
+- Provide clear next steps CTAs and contextual help messages.
+- Integrate with Email Verification & Notifications feature: trigger verification emails, digest emails, and alerts as appropriate.
+- Maintain a cohesive UI with the Login/Signup entry point and SSO frontend as the authentication gateway.
 
-Connected features:
-- Password Management: Tokenized reset links, strength validation, and secure password change flow.
-- Login / Signup: Entry point that links to the reset flow (e.g., “Forgot password?” link), SSO integration considerations, and the primary CTA guiding users toward signing up or starting a free trial.
+UI elements and how they need to look:
+- Status banner/cards showing: Pending verification, Verification successful, Token expired/invalid.
+- Verification token processing state (loading indicator while validating the token).
+- Resend verification button (with cooldown/visibility rules).
+- Next steps CTA: Go to Dashboard, Complete Profile, or Return to Help/Support.
+- Inline error messages and support contact options (email/phone) if verification fails.
+- Small helper text and accessible ARIA attributes.
 
-UI elements and visual guidance:
-- Request reset form: email input, submit button, success confirmation UI, inline validation messages, and a concise security tip.
-- Reset token form: new password, confirm password, password strength meter, token-aware validation, and a submission UX that confirms success or shows actionable errors.
-- Back to login link, support/contact options, and security tips.
-- UX should emphasize clarity, trust, and accessibility with high-contrast typography and a calm, warm aesthetic per the project’s visual language.
+Connected features and API integrations:
+- Token validation endpoint (verify token, userId, timestamp).
+- Resend verification endpoint (issue new token, send email).
+- Post-verification onboarding guidance API (fetch recommended next steps based on profile status).
+- Email system integration: trigger verification emails and notifications (digest/alerts) as needed.
 
-API integrations:
-- The page should be designed to work in a system where the backend issues reset tokens and validates them. The prompt requires no external API specifics beyond a clean contract: endpoints for requesting a reset, validating a token, and updating the password.
+Visual guidance:
+- Warm, calm aesthetic per brand palette; strong typographic hierarchy; consistent rhythm with ample whitespace; clear status emphasis.
 
 ## Components to Build
-- PasswordResetRequestForm
-  - Props: onSubmit(email)
-  - State: email, isSubmitting, error, success
-  - Validation: email format, non-empty
-  - UX: inline validation, accessible error messaging, helper text about reset email timing
-- PasswordResetConfirmForm
-  - Props: onSubmit(token, newPassword)
-  - State: password, confirmPassword, strength, isSubmitting, error, success
-  - Validation: password strength rules, password match, token presence/validation parity
-  - UX: strength meter (visual and textual hints), real-time validation
-- PasswordStrengthMeter
-  - Props: password
-  - Output: strength value (e.g., 0–100), qualitative label (Weak/Fair/Good/Strong)
-- EmailValidationHelper
-  - Small utility component for live email format guidance
-- TokenBadge or TokenPresenceIndicator
-  - Indicates if a token is present/valid (on the client-side before token validation)
-- BackToLoginLink
-  - Simple navigational element with accessible focus states
-- SecurityTipsCard
-  - Static content highlighting best practices and how to reach support if suspicious activity
-- ErrorDisplay
-  - Reusable component for rendering server/client errors with actionable remedies
-- LayoutWrapper
-  - Provides the consistent card-based layout, grid, and responsive spacing per the design system
+- EmailVerificationPage component
+  - Props/state: userId, token from query params, fetch status, error messages, cooldown timer.
+  - Subcomponents: StatusCard, TokenLoader, ResendButton, NextStepsCTA, HelpLink.
+- StatusCard
+  - Variants: Pending, Success, Expired/Invalid
+  - Visual emphasis with appropriate iconography, color, and copy.
+- TokenLoader
+  - Spinner/progress indicator with accessible ARIA labels.
+- ResendVerification
+  - Button with cooldown timer, disabled during cooldown, success/failure toast messages.
+- NextStepsPanel
+  - Contextual CTAs based on user profile state (dashboard, complete profile, set up SSO).
+- HelpPanel
+  - Lightweight contact options (email/phone) and FAQ links.
+- LoginSignupHeader
+  - Reusable header integrated with SSO and Get started CTA.
+
+Frontend tech specifics:
+- Framework: React (with TypeScript preferred)
+- State management: React useState/useEffect; consider lightweight context if needed
+- Routing: React Router (or framework-equivalent) for token-based route (e.g., /verify?token=...&userId=...)
+- API client: fetch or axios with proper error handling
+- Accessibility: ARIA roles, aria-live regions for status updates, keyboard accessible controls
 
 ## Implementation Requirements
 
 ### Frontend
-- Pages:
-  - PasswordResetRequestPage
-  - PasswordResetConfirmPage (token-scoped route, e.g., /reset-password?token=XYZ)
-- Routing:
-  - Public routes for request page and reset page with token parameter
-  - Redirect-to-login on success or after user action as appropriate
-- State Management:
-  - Local component state for form fields; avoid global state unless part of a larger auth store
-  - Use React useState/useEffect with correct defaults
-- Accessibility:
-  - All inputs with associated labels; aria-live regions for status updates
-  - Keyboard navigable; focus outlines visible
-- Validation:
-  - Email validation should use a robust regex or a validated utility
-  - Password validation should enforce a minimum length and common strength checks; the strength meter should update in real-time
-- Null safety:
-  - Guard all API response data with data ?? [] patterns where arrays are expected
-  - Use Array.isArray() guards when mapping over result data
-  - Initialize useState([]) for any arrays; never use useState() without a type for arrays
-- API interaction patterns (internal contracts):
-  - POST /auth/forgot-password with { email } -> 200 or 400 with structured error
-  - POST /auth/reset-password with { token, newPassword } -> 200 on success, 4xx on errors
-  - Tokens are expected to be validated server-side; client should handle 400/401/403 with user-friendly messages
-- Security considerations:
-  - Never reveal whether an email is registered in the response to the request (avoid enumerating users)
-  - Tokens: handle via URL-safe tokens; do not log tokens; ensure secure transmission via HTTPS
-- Data Safety:
-  - Do not rely on any global mutable state for token or password data
-  - If using API mocks during development, ensure responses follow the shape expected by the code
+- Pages and routes
+  - /verify (Email Verification Page)
+  - /login and /signup (connected via LoginSignupHeader)
+  - Use query parameters token and userId for initial verification attempt.
+- UI components
+  - Ensure all components guard against null/undefined values before array methods.
+  - Initialize arrays as empty: useState<T[]>([]) where applicable.
+  - Always use data ?? [] for API responses returning arrays.
+  - Guard against potential null data when mapping: (items ?? []).map(...) or Array.isArray(items) ? items.map(...) : [].
+- Token verification flow
+  - On page load, if token and userId exist, call verifyToken API.
+  - Show loading state while awaiting API response.
+  - If success: update status to Success and present NextStepsCTA.
+  - If token invalid/expired: show Expired/Invalid state with guidance and option to resend.
+- Resend flow
+  - Resend button triggers API to issue new token and send email.
+  - Implement cooldown timer (e.g., 60 seconds) to prevent spamming.
+  - Show toast/inline message on success or error.
+- Next steps
+  - Detect user profile completeness and guide to Dashboard or Complete Profile.
+- API integration (mockable in dev)
+  - POST /api/auth/verify-token with body { userId, token }
+  - POST /api/auth/resend-token with body { userId }
+  - GET /api/user/profile-status?userId=...
+  - POST /api/email/send-verification (or trigger via backend after verify)
+- Validation
+  - Validate token format length/structure client-side before sending.
+  - Validate userId type (string) and presence.
+- Error handling
+  - Show user-friendly messages; log technical errors for analytics.
+  - Provide contact support link if verification repeatedly fails.
 
 ### Backend
-- Endpoints (contract-style):
-  - POST /auth/forgot-password
-    - Request: { email: string }
-    - Response: { message: string } or error with code
-  - POST /auth/reset-password
-    - Request: { token: string, newPassword: string }
-    - Response: { message: string } and user session creation/token issuance if applicable
-  - Token handling:
-    - Validate token expiration, one-time use, and scope
-- Database considerations:
-  - Table: PasswordResetTokens (token, user_id, expires_at, used_at)
-  - Ensure idempotent write-once semantics and idempotent read patterns
-- Security:
-  - Tokens should be stored hashed in DB (if feasible) and compared via a secure verification process
-  - Rate limiting for forgot-password requests
-- Validation:
-  - Ensure newPassword meets strength requirements (length, complexity)
-  - If implementing strength checks on server as well, expose status in responses as needed for UX
+- Endpoints
+  - POST /api/auth/verify-token
+    - Input: { userId: string, token: string }
+    - Behavior: verify token, mark user as verified if valid, return status and onboarding guidance.
+    - Safeguards: idempotent verification; handle already-verified gracefully.
+  - POST /api/auth/resend-token
+    - Input: { userId: string }
+    - Behavior: generate new token, save with expiration, enqueue transactional email sending.
+  - GET /api/user/profile-status?userId=...
+    - Input: userId
+    - Behavior: return completion flags for profile, company data, preferences to tailor next steps.
+- Data models
+  - User
+    - id, email, isVerified (boolean), verificationToken, tokenExpiresAt
+  - VerificationToken
+    - token, userId, expiresAt, consumed (boolean)
+  - Profile
+    - userId, isComplete, fieldsCompletedCount, onboardingStage
+- Security
+  - Token validation uses secure, time-limited tokens.
+  - Authenticate internal requests with session or JWT as appropriate.
+  - Rate limiting on resend to prevent abuse.
+- Validation
+  - Always validate input shapes; sanitize tokens; handle missing fields with clear errors.
+- Email system integration
+  - On verify success or resend, trigger transactional email events (verification email, digest/alerts as appropriate).
+  - Persist raw payloads for audit as per project requirements.
 
 ### Integration
-- Flow:
-  - User enters email on Request form -> frontend calls forgot-password -> backend queues/sends email with tokenized link
-  - User clicks link -> navigates to PasswordResetConfirmPage with token -> frontend validates presence and, if necessary, pings server to ensure token is valid (optional pre-check) -> user enters new password -> frontend calls reset-password -> backend updates password, invalidates token, and optionally logs the user in or redirects to login
-- Data contracts:
-  - Ensure consistent error shapes across endpoints for UX parity
-- Shared components:
-  - Reuse PasswordStrengthMeter, ErrorDisplay, and Button components to maintain visual consistency
+- Data flow
+  - Verification page calls verify-token; backend updates user status and returns onboarding direction.
+  - Verification status influences NextStepsCTA via profile-status data.
+  - Resend-token triggers email workflow; on success, the UI shows a success message and cooldown state.
+- Data safety
+  - Always guard array/data handling with nullish coalescing and Array.isArray checks.
+  - Ensure all API responses are validated: const list = Array.isArray(response?.data) ? response.data : [].
 
 ## User Experience Flow
-1. User lands on Password Reset page from Login/Signup page via “Forgot password?” or from the primary navigation’s Get started path if applicable.
-2. Request reset:
-   - User enters an email address.
-   - Live validation confirms email format.
-   - On submit, show a brief processing state; if the email exists, backend triggers a reset email (without confirming email existence in response).
-   - Display a success banner: “If an account exists for this email, you’ll receive a password reset link shortly.”
-3. Email arrives with a reset link containing a token: https://app.example.com/reset-password?token=XYZ
-4. Reset confirmation:
-   - User opens the link; the app presents a password reset form with fields: New Password and Confirm Password.
-   - Live password strength indicator computes strength in real-time.
-   - Client-side validation ensures passwords match and meet minimum requirements; provide helpful hints.
-   - Submit: show processing state; on success, navigate to login with a success toast or automatically sign-in if your flow supports it; otherwise, display a confirmation message with a link to login or start a trial.
-5. Support and security guidance:
-   - Provide “If you didn’t request this, contact support” messaging and links.
-   - Security tips card with best practices and contact path.
+1) User signs up via signup form or SSO on the Login/Signup page.
+2) After signup, user is directed to Email Verification page with a token in the URL (or token managed via session).
+3) Page loads; shows verification status as Pending with a loading state.
+4) If token is valid:
+   - Verification succeeds; display Success state.
+   - Show Next Steps: Go to Dashboard or Complete Profile (if profile incomplete).
+5) If token is invalid or expired:
+   - Show Expired/Invalid state with guidance.
+   - Offer Resend Verification button (with cooldown).
+   - Provide support contact options and retry guidance.
+6) User clicks Next Steps CTA to navigate to the appropriate area (Dashboard or Profile).
+7) System proactively triggers Digest/Alerts emails if applicable when status changes.
 
 ## Technical Specifications
 
-- Data Models:
-  - User: existing in the system (id, email, passwordHash, etc.)
-  - PasswordResetToken (token, userId, expiresAt, usedAt, createdAt)
-- API Endpoints:
-  - POST /auth/forgot-password
-    - Input: { email }
-    - Output: { message } or error code
-  - POST /auth/reset-password
-    - Input: { token, newPassword }
-    - Output: { message } or error code
-- Security:
-  - Passwords must be stored securely (hashing with bcrypt/scrypt/Argon2)
-  - Tokens should be time-bound and single-use; avoid including sensitive data in the token
-  - Rate-limit forgot-password requests (per IP/user)
-  - Do not disclose whether email exists in the system in the forgot-password response
-- Validation:
-  - Email format validation
-  - Password strength validation: minimum length (e.g., 12+), mix of character types, disallow common passwords (optional), entropy checks
-  - Ensure newPassword and confirmPassword match on client and server
-- Data Handling Safety:
-  - Supabase-specific guidance (if used in this stack) requires: data ?? [] when mapping results, Array.isArray() checks before map/filter/reduce, and useState<Type[]>([]) as defaults
-  - Optional chaining for nested API response data
-  - Destructure with defaults: const { items = [], count = 0 } = response ?? {}
+Data Models: (Core structures)
+- User
+  - id: string
+  - email: string
+  - isVerified: boolean
+  - verificationToken: string | null
+  - tokenExpiresAt: string | null (ISO date)
+- VerificationToken
+  - token: string
+  - userId: string
+  - expiresAt: string
+  - consumed: boolean
+- Profile
+  - userId: string
+  - isComplete: boolean
+  - onboardingStage: string
+  - fieldsCompletedCount: number
 
-## Acceptance Criteria
-- [ ] Password reset request validates email and triggers the backend flow without leaking account existence
-- [ ] Reset token flow validates token on the server and allows password update with strong validation
-- [ ] PasswordStrengthMeter provides real-time feedback and UI updates correctly
-- [ ] All array operations guard against null/undefined using (array ?? []).map(...) or Array.isArray(array) ? array.map(...) : []
-- [ ] useState hooks initialize arrays with [] and objects with appropriate defaults
-- [ ] No runtime crashes due to null/undefined values in API responses
-- [ ] Accessibility checks pass: labels, focus outlines, ARIA live regions for status updates
-- [ ] UI matches the design system, including color palette, typography, spacing, and card-based layout
-- [ ] Error handling presents clear, actionable messages and links to help/support
+API Endpoints:
+- POST /api/auth/verify-token
+  - Body: { userId: string, token: string }
+  - Response: { success: boolean, status: 'verified'|'pending'|'expired'|'invalid', nextSteps?: string[] }
+- POST /api/auth/resend-token
+  - Body: { userId: string }
+  - Response: { success: boolean, message: string, token?: string, expiresAt?: string }
+- GET /api/user/profile-status?userId=...
+  - Response: { isComplete: boolean, onboardingStage: string, fieldsCompletedCount: number }
+- POST /api/email/send-verification
+  - Body: { userId: string, email: string, token: string }
 
-## UI/UX Guidelines
-Apply the project’s design system consistently:
-- Typography: Playfair Display for headings; Inter for body
-- Color palette and neutral background per the provided values
-- Card-based layout with soft shadows and rounded corners
-- Primary CTAs with dark charcoal color and white text
-- Subtle borders with rgba(0,0,0,0.08) for dividers
-- Responsive grid: 2–3 columns on wide screens; 1–2 columns on tablets/phones
-- Interactive elements: hover lift, color/contrast shifts, accessible focus states
+Security:
+- Protect verify-token and resend-token routes with authentication context (ensuring userId matches session).
+- Token validation should be server-side: compare token, check expiration, and ensure token is not consumed.
+- Rate limiting on /api/auth/resend-token (per user/IP).
+- Use HTTPS, secure cookies, and standard CSRF protections for state-changing endpoints.
+- Do not leak token values in client UI beyond necessary.
 
-## Visual Style
+Validation:
+- Client: token length/format; userId presence; token presence when verifying.
+- Server: strict schema validation; handle invalid payloads gracefully with 400 responses and helpful error messages.
+- All array results from API calls must be guarded: (data ?? []) and Array.isArray(data) checks.
+
+Required React State/Defaults:
+- useState<string | null>(null) for token
+- useState<boolean>(false) for loading
+- useState<{ status: 'pending'|'success'|'expired'|'invalid'; message?: string }>(initial)
+- useState<T[]>([]) for any arrays (e.g., potential nextSteps, error logs)
+- Initialize arrays with []: useState<T[]>([]) and avoid useState() for arrays/objects.
+
+Acceptance Criteria
+- [ ] The Email Verification page shows correct status for pending, success, and expired/invalid tokens with appropriate UI states and messaging.
+- [ ] Resend verification works: API call is made, cooldown implemented, success/failure messages shown, and token sent via email.
+- [ ] Next steps CTA directs user to Dashboard or Complete Profile based on profile-status API data.
+- [ ] All API responses are validated client-side, and all array accesses guard against null/undefined (e.g., (response?.data ?? []) or Array.isArray(response?.data) ? response.data : []).
+- [ ] The UI adheres to the visual style guidelines, including typography, color palette, spacing, and components consistent with the Login/Signup flow.
+- [ ] Security: token verification is secure, idempotent, and rate-limited on resend; no exposure of raw tokens in UI.
+
+UI/UX Guidelines
+Apply the project’s design system:
+- Ensure a warm, calm, professional aesthetic with generous whitespace.
+- Use Playfair Display for headings and Inter for body text.
+- Maintain consistent rounded corners, shadows, and subtle hover states.
+- Provide accessible focus outlines and ARIA labels for all interactive elements.
+- Responsive layout: 2–3 columns on wide screens; 1–2 columns on tablets/phones; content container max-width ~1200px.
+- Primary CTA buttons use #111111 with white text; secondary options use pastel-tinted fills or borders per design system.
+
+Visual Style
 
 Color Palette:
 - Page Background: #F6EFE0
 - Card Surfaces / Pastel Tiles: #FFFFFF, #FBD8C5, #E8DED3, #C8D4C0, #D8C9B0, #E6C9C2
 - Primary Text: #1A1A1A
-- Muted Text / Subtitles: #5A5A5A
-- Accent / UI Highlights: #2B2B2B to #111111
+- Muted Text: #5A5A5A
+- Accent: #2B2B2B to #111111
 - Primary CTA Button: #111111
 - CTA Text: #FFFFFF
-- Subtle Borders / Dividers: rgba(0,0,0,0.08)
+- Dividers: rgba(0,0,0,0.08)
 
 Typography & Layout:
-- H1: 48–56px, Playfair Display, 700–800
-- Subheads: 20–28px
-- Body: 14–16px, Inter
-- UI labels: 12–14px, Inter
-- Max content width: ~1200px; centered
-- Responsive grid: 2–3 columns on wide, 1–2 on tablet/phone
-- Elevation: soft shadows, rounded corners ~20–28px
+- Font: Playfair Display (H1 48–56px, 700–800), Inter (body 14–16px, 400–600), UI labels 12–14px
+- Layout: max-width 1200px, generous vertical rhythm, responsive grids
+- Visual Treatments: warm neutrals, subtle elevations, rounded corners
 
-Key Design Elements:
-- Cards with rounded corners and soft shadows
-- Hover states: subtle lift and color/contrast shift
-- Grid emphasis on pastel-tinted tiles and hero panels
+Key Design Elements
+- Card design with 20–28px radius; hover lift states
+- Navigation: top bar with logo, links, Get Started action
+- Data visuals: narrative/content blocks, not heavy charts
+- Interactive elements: primary CTAs as pill-like dark buttons; accessible forms
 
-Navigation:
-- Top bar with left-aligned logo/name; center/left links; right-aligned Get Started
-- Accessible focus states and bold active states
+Design Philosophy
+- Professional, calm, human-centered; narrative-first; accessible; trust-building
+- Clear hierarchy and actionable insights; responsive, grid-driven
 
-Data Visualization:
-- Narrative/tiles emphasis; if used, pastel palette-consistent visuals
+Connected Pages and Features
+- Connected Page: Login / Signup (authentication entry point with SSO and free-trial CTA)
+- Connected Features: Email Verification & Notifications (transactional emails, digests, alerts)
 
-Interactive Elements:
-- Primary CTAs: pill-like with white text
-- Secondary options: pale pastels or light borders
-- Form elements: rounded, soft borders, accessible focus outlines
-- Micro-interactions: gentle lift/shadow on hover
+Optional Considerations
+- Localized messaging and time-zone aware expiration hints
+- Audit logging for verification events
 
-Design Philosophy:
-- Professional, calm, human-centered
-- Clean, accessible, warm, narrative-first
-- Readable, audit-friendly, and trust-building
+Deliverables
+- Frontend: EmailVerificationPage with supporting components (StatusCard, Resend, NextStepsCTA, HelpPanel)
+- Backend: API endpoints for verify-token, resend-token, profile-status (as described)
+- Documentation: API contracts, data model schemas, and a deployment plan
+- Tests: unit tests for status transitions, API call mocks, and runtime safety checks (nullish handling, array guards)
 
----
-
-If you need this prompt adapted for a specific framework (React, Vue, Svelte, Next.js, Remix), authentication library (Auth0, Firebase, Supabase Auth), or backend tech (Node/Express, NestJS, serverless), I can tailor the prompts with precise file structures, component stubs, and integration hooks. for style.
+This prompt ensures the AI development tool can implement a robust, safe, and design-consistent Email Verification feature that aligns with the project’s architecture, security requirements, and UX goals. for style.
 
 CRITICAL DESIGN REQUIREMENTS:
 - You MUST follow ALL design principles and patterns specified in the Design Reference above
@@ -1562,234 +1589,261 @@ CRITICAL TECHNICAL REQUIREMENTS:
 - When Supabase is configured: use Edge Functions for LLM and server-only logic; never expose API keys in the client
 
 === TASK ===
-# Password Reset
+# Email Verification
 
 ## Overview
-This prompt guides an AI development tool to implement a robust, secure, and user-friendly Password Reset flow within a larger authentication ecosystem. It covers two related UX tracks: (1) Requesting a password reset (email-based initiation) and (2) Confirming a reset via a tokenized link (new password with strength validation). The implementation must integrate with the existing Login/Signup flow (including SSO and a primary “Get started”/free trial CTA) and align with the project’s design system, accessibility standards, and runtime safety requirements.
+This prompt guides the AI development tool to build a robust Email Verification experience integrated with transactional email workflows and a cohesive login/signup entry point. The system should securely process verification tokens, display clear verification status after signup, offer token resends, and guide users to the next steps (dashboard, profile completion). It must be resilient, guard against null/undefined values for array-methods, and adhere to the project’s design system, accessibility standards, and runtime safety rules described in the Mandatory Coding Standards.
 
 ## Page Description (Full Detail)
-What the page is:
-- A Password Reset experience that enables users to (a) request a reset by supplying their email, (b) receive a secure tokenized reset link (tokenized with time-bound validity), and (c) confirm the reset by entering a new password and confirming it on the reset page. It must gracefully handle cases where users forget credentials and provide clear UX guidance.
+What this page is:
+- The Email Verification page is the post-sign-up destination that shows the user’s verification status, processes any provided verification tokens, handles token expiry or invalid tokens, and advises the user on subsequent steps (e.g., go to Dashboard, complete profile, or contact support).
 
 Goals:
-- Provide a secure, low-friction password reset flow that minimizes friction for legitimate users while mitigating abuse.
-- Validate email and password inputs with live feedback, including password strength indicators.
-- Ensure reset tokens are validated server-side with appropriate expirations and one-use semantics.
-- Preserve auditability by logging reset events and guaranteeing idempotent, retry-tolerant ingestion in any data integration points (even though the current project’s API surface is not externally API-driven, design should accommodate secure, auditable flows).
+- Accurately reflect verification state: pending (token just issued), success (token verified), expired/invalid (token invalid or expired).
+- Provide a resilient flow for resending the verification email.
+- Provide clear next steps CTAs and contextual help messages.
+- Integrate with Email Verification & Notifications feature: trigger verification emails, digest emails, and alerts as appropriate.
+- Maintain a cohesive UI with the Login/Signup entry point and SSO frontend as the authentication gateway.
 
-Connected features:
-- Password Management: Tokenized reset links, strength validation, and secure password change flow.
-- Login / Signup: Entry point that links to the reset flow (e.g., “Forgot password?” link), SSO integration considerations, and the primary CTA guiding users toward signing up or starting a free trial.
+UI elements and how they need to look:
+- Status banner/cards showing: Pending verification, Verification successful, Token expired/invalid.
+- Verification token processing state (loading indicator while validating the token).
+- Resend verification button (with cooldown/visibility rules).
+- Next steps CTA: Go to Dashboard, Complete Profile, or Return to Help/Support.
+- Inline error messages and support contact options (email/phone) if verification fails.
+- Small helper text and accessible ARIA attributes.
 
-UI elements and visual guidance:
-- Request reset form: email input, submit button, success confirmation UI, inline validation messages, and a concise security tip.
-- Reset token form: new password, confirm password, password strength meter, token-aware validation, and a submission UX that confirms success or shows actionable errors.
-- Back to login link, support/contact options, and security tips.
-- UX should emphasize clarity, trust, and accessibility with high-contrast typography and a calm, warm aesthetic per the project’s visual language.
+Connected features and API integrations:
+- Token validation endpoint (verify token, userId, timestamp).
+- Resend verification endpoint (issue new token, send email).
+- Post-verification onboarding guidance API (fetch recommended next steps based on profile status).
+- Email system integration: trigger verification emails and notifications (digest/alerts) as needed.
 
-API integrations:
-- The page should be designed to work in a system where the backend issues reset tokens and validates them. The prompt requires no external API specifics beyond a clean contract: endpoints for requesting a reset, validating a token, and updating the password.
+Visual guidance:
+- Warm, calm aesthetic per brand palette; strong typographic hierarchy; consistent rhythm with ample whitespace; clear status emphasis.
 
 ## Components to Build
-- PasswordResetRequestForm
-  - Props: onSubmit(email)
-  - State: email, isSubmitting, error, success
-  - Validation: email format, non-empty
-  - UX: inline validation, accessible error messaging, helper text about reset email timing
-- PasswordResetConfirmForm
-  - Props: onSubmit(token, newPassword)
-  - State: password, confirmPassword, strength, isSubmitting, error, success
-  - Validation: password strength rules, password match, token presence/validation parity
-  - UX: strength meter (visual and textual hints), real-time validation
-- PasswordStrengthMeter
-  - Props: password
-  - Output: strength value (e.g., 0–100), qualitative label (Weak/Fair/Good/Strong)
-- EmailValidationHelper
-  - Small utility component for live email format guidance
-- TokenBadge or TokenPresenceIndicator
-  - Indicates if a token is present/valid (on the client-side before token validation)
-- BackToLoginLink
-  - Simple navigational element with accessible focus states
-- SecurityTipsCard
-  - Static content highlighting best practices and how to reach support if suspicious activity
-- ErrorDisplay
-  - Reusable component for rendering server/client errors with actionable remedies
-- LayoutWrapper
-  - Provides the consistent card-based layout, grid, and responsive spacing per the design system
+- EmailVerificationPage component
+  - Props/state: userId, token from query params, fetch status, error messages, cooldown timer.
+  - Subcomponents: StatusCard, TokenLoader, ResendButton, NextStepsCTA, HelpLink.
+- StatusCard
+  - Variants: Pending, Success, Expired/Invalid
+  - Visual emphasis with appropriate iconography, color, and copy.
+- TokenLoader
+  - Spinner/progress indicator with accessible ARIA labels.
+- ResendVerification
+  - Button with cooldown timer, disabled during cooldown, success/failure toast messages.
+- NextStepsPanel
+  - Contextual CTAs based on user profile state (dashboard, complete profile, set up SSO).
+- HelpPanel
+  - Lightweight contact options (email/phone) and FAQ links.
+- LoginSignupHeader
+  - Reusable header integrated with SSO and Get started CTA.
+
+Frontend tech specifics:
+- Framework: React (with TypeScript preferred)
+- State management: React useState/useEffect; consider lightweight context if needed
+- Routing: React Router (or framework-equivalent) for token-based route (e.g., /verify?token=...&userId=...)
+- API client: fetch or axios with proper error handling
+- Accessibility: ARIA roles, aria-live regions for status updates, keyboard accessible controls
 
 ## Implementation Requirements
 
 ### Frontend
-- Pages:
-  - PasswordResetRequestPage
-  - PasswordResetConfirmPage (token-scoped route, e.g., /reset-password?token=XYZ)
-- Routing:
-  - Public routes for request page and reset page with token parameter
-  - Redirect-to-login on success or after user action as appropriate
-- State Management:
-  - Local component state for form fields; avoid global state unless part of a larger auth store
-  - Use React useState/useEffect with correct defaults
-- Accessibility:
-  - All inputs with associated labels; aria-live regions for status updates
-  - Keyboard navigable; focus outlines visible
-- Validation:
-  - Email validation should use a robust regex or a validated utility
-  - Password validation should enforce a minimum length and common strength checks; the strength meter should update in real-time
-- Null safety:
-  - Guard all API response data with data ?? [] patterns where arrays are expected
-  - Use Array.isArray() guards when mapping over result data
-  - Initialize useState([]) for any arrays; never use useState() without a type for arrays
-- API interaction patterns (internal contracts):
-  - POST /auth/forgot-password with { email } -> 200 or 400 with structured error
-  - POST /auth/reset-password with { token, newPassword } -> 200 on success, 4xx on errors
-  - Tokens are expected to be validated server-side; client should handle 400/401/403 with user-friendly messages
-- Security considerations:
-  - Never reveal whether an email is registered in the response to the request (avoid enumerating users)
-  - Tokens: handle via URL-safe tokens; do not log tokens; ensure secure transmission via HTTPS
-- Data Safety:
-  - Do not rely on any global mutable state for token or password data
-  - If using API mocks during development, ensure responses follow the shape expected by the code
+- Pages and routes
+  - /verify (Email Verification Page)
+  - /login and /signup (connected via LoginSignupHeader)
+  - Use query parameters token and userId for initial verification attempt.
+- UI components
+  - Ensure all components guard against null/undefined values before array methods.
+  - Initialize arrays as empty: useState<T[]>([]) where applicable.
+  - Always use data ?? [] for API responses returning arrays.
+  - Guard against potential null data when mapping: (items ?? []).map(...) or Array.isArray(items) ? items.map(...) : [].
+- Token verification flow
+  - On page load, if token and userId exist, call verifyToken API.
+  - Show loading state while awaiting API response.
+  - If success: update status to Success and present NextStepsCTA.
+  - If token invalid/expired: show Expired/Invalid state with guidance and option to resend.
+- Resend flow
+  - Resend button triggers API to issue new token and send email.
+  - Implement cooldown timer (e.g., 60 seconds) to prevent spamming.
+  - Show toast/inline message on success or error.
+- Next steps
+  - Detect user profile completeness and guide to Dashboard or Complete Profile.
+- API integration (mockable in dev)
+  - POST /api/auth/verify-token with body { userId, token }
+  - POST /api/auth/resend-token with body { userId }
+  - GET /api/user/profile-status?userId=...
+  - POST /api/email/send-verification (or trigger via backend after verify)
+- Validation
+  - Validate token format length/structure client-side before sending.
+  - Validate userId type (string) and presence.
+- Error handling
+  - Show user-friendly messages; log technical errors for analytics.
+  - Provide contact support link if verification repeatedly fails.
 
 ### Backend
-- Endpoints (contract-style):
-  - POST /auth/forgot-password
-    - Request: { email: string }
-    - Response: { message: string } or error with code
-  - POST /auth/reset-password
-    - Request: { token: string, newPassword: string }
-    - Response: { message: string } and user session creation/token issuance if applicable
-  - Token handling:
-    - Validate token expiration, one-time use, and scope
-- Database considerations:
-  - Table: PasswordResetTokens (token, user_id, expires_at, used_at)
-  - Ensure idempotent write-once semantics and idempotent read patterns
-- Security:
-  - Tokens should be stored hashed in DB (if feasible) and compared via a secure verification process
-  - Rate limiting for forgot-password requests
-- Validation:
-  - Ensure newPassword meets strength requirements (length, complexity)
-  - If implementing strength checks on server as well, expose status in responses as needed for UX
+- Endpoints
+  - POST /api/auth/verify-token
+    - Input: { userId: string, token: string }
+    - Behavior: verify token, mark user as verified if valid, return status and onboarding guidance.
+    - Safeguards: idempotent verification; handle already-verified gracefully.
+  - POST /api/auth/resend-token
+    - Input: { userId: string }
+    - Behavior: generate new token, save with expiration, enqueue transactional email sending.
+  - GET /api/user/profile-status?userId=...
+    - Input: userId
+    - Behavior: return completion flags for profile, company data, preferences to tailor next steps.
+- Data models
+  - User
+    - id, email, isVerified (boolean), verificationToken, tokenExpiresAt
+  - VerificationToken
+    - token, userId, expiresAt, consumed (boolean)
+  - Profile
+    - userId, isComplete, fieldsCompletedCount, onboardingStage
+- Security
+  - Token validation uses secure, time-limited tokens.
+  - Authenticate internal requests with session or JWT as appropriate.
+  - Rate limiting on resend to prevent abuse.
+- Validation
+  - Always validate input shapes; sanitize tokens; handle missing fields with clear errors.
+- Email system integration
+  - On verify success or resend, trigger transactional email events (verification email, digest/alerts as appropriate).
+  - Persist raw payloads for audit as per project requirements.
 
 ### Integration
-- Flow:
-  - User enters email on Request form -> frontend calls forgot-password -> backend queues/sends email with tokenized link
-  - User clicks link -> navigates to PasswordResetConfirmPage with token -> frontend validates presence and, if necessary, pings server to ensure token is valid (optional pre-check) -> user enters new password -> frontend calls reset-password -> backend updates password, invalidates token, and optionally logs the user in or redirects to login
-- Data contracts:
-  - Ensure consistent error shapes across endpoints for UX parity
-- Shared components:
-  - Reuse PasswordStrengthMeter, ErrorDisplay, and Button components to maintain visual consistency
+- Data flow
+  - Verification page calls verify-token; backend updates user status and returns onboarding direction.
+  - Verification status influences NextStepsCTA via profile-status data.
+  - Resend-token triggers email workflow; on success, the UI shows a success message and cooldown state.
+- Data safety
+  - Always guard array/data handling with nullish coalescing and Array.isArray checks.
+  - Ensure all API responses are validated: const list = Array.isArray(response?.data) ? response.data : [].
 
 ## User Experience Flow
-1. User lands on Password Reset page from Login/Signup page via “Forgot password?” or from the primary navigation’s Get started path if applicable.
-2. Request reset:
-   - User enters an email address.
-   - Live validation confirms email format.
-   - On submit, show a brief processing state; if the email exists, backend triggers a reset email (without confirming email existence in response).
-   - Display a success banner: “If an account exists for this email, you’ll receive a password reset link shortly.”
-3. Email arrives with a reset link containing a token: https://app.example.com/reset-password?token=XYZ
-4. Reset confirmation:
-   - User opens the link; the app presents a password reset form with fields: New Password and Confirm Password.
-   - Live password strength indicator computes strength in real-time.
-   - Client-side validation ensures passwords match and meet minimum requirements; provide helpful hints.
-   - Submit: show processing state; on success, navigate to login with a success toast or automatically sign-in if your flow supports it; otherwise, display a confirmation message with a link to login or start a trial.
-5. Support and security guidance:
-   - Provide “If you didn’t request this, contact support” messaging and links.
-   - Security tips card with best practices and contact path.
+1) User signs up via signup form or SSO on the Login/Signup page.
+2) After signup, user is directed to Email Verification page with a token in the URL (or token managed via session).
+3) Page loads; shows verification status as Pending with a loading state.
+4) If token is valid:
+   - Verification succeeds; display Success state.
+   - Show Next Steps: Go to Dashboard or Complete Profile (if profile incomplete).
+5) If token is invalid or expired:
+   - Show Expired/Invalid state with guidance.
+   - Offer Resend Verification button (with cooldown).
+   - Provide support contact options and retry guidance.
+6) User clicks Next Steps CTA to navigate to the appropriate area (Dashboard or Profile).
+7) System proactively triggers Digest/Alerts emails if applicable when status changes.
 
 ## Technical Specifications
 
-- Data Models:
-  - User: existing in the system (id, email, passwordHash, etc.)
-  - PasswordResetToken (token, userId, expiresAt, usedAt, createdAt)
-- API Endpoints:
-  - POST /auth/forgot-password
-    - Input: { email }
-    - Output: { message } or error code
-  - POST /auth/reset-password
-    - Input: { token, newPassword }
-    - Output: { message } or error code
-- Security:
-  - Passwords must be stored securely (hashing with bcrypt/scrypt/Argon2)
-  - Tokens should be time-bound and single-use; avoid including sensitive data in the token
-  - Rate-limit forgot-password requests (per IP/user)
-  - Do not disclose whether email exists in the system in the forgot-password response
-- Validation:
-  - Email format validation
-  - Password strength validation: minimum length (e.g., 12+), mix of character types, disallow common passwords (optional), entropy checks
-  - Ensure newPassword and confirmPassword match on client and server
-- Data Handling Safety:
-  - Supabase-specific guidance (if used in this stack) requires: data ?? [] when mapping results, Array.isArray() checks before map/filter/reduce, and useState<Type[]>([]) as defaults
-  - Optional chaining for nested API response data
-  - Destructure with defaults: const { items = [], count = 0 } = response ?? {}
+Data Models: (Core structures)
+- User
+  - id: string
+  - email: string
+  - isVerified: boolean
+  - verificationToken: string | null
+  - tokenExpiresAt: string | null (ISO date)
+- VerificationToken
+  - token: string
+  - userId: string
+  - expiresAt: string
+  - consumed: boolean
+- Profile
+  - userId: string
+  - isComplete: boolean
+  - onboardingStage: string
+  - fieldsCompletedCount: number
 
-## Acceptance Criteria
-- [ ] Password reset request validates email and triggers the backend flow without leaking account existence
-- [ ] Reset token flow validates token on the server and allows password update with strong validation
-- [ ] PasswordStrengthMeter provides real-time feedback and UI updates correctly
-- [ ] All array operations guard against null/undefined using (array ?? []).map(...) or Array.isArray(array) ? array.map(...) : []
-- [ ] useState hooks initialize arrays with [] and objects with appropriate defaults
-- [ ] No runtime crashes due to null/undefined values in API responses
-- [ ] Accessibility checks pass: labels, focus outlines, ARIA live regions for status updates
-- [ ] UI matches the design system, including color palette, typography, spacing, and card-based layout
-- [ ] Error handling presents clear, actionable messages and links to help/support
+API Endpoints:
+- POST /api/auth/verify-token
+  - Body: { userId: string, token: string }
+  - Response: { success: boolean, status: 'verified'|'pending'|'expired'|'invalid', nextSteps?: string[] }
+- POST /api/auth/resend-token
+  - Body: { userId: string }
+  - Response: { success: boolean, message: string, token?: string, expiresAt?: string }
+- GET /api/user/profile-status?userId=...
+  - Response: { isComplete: boolean, onboardingStage: string, fieldsCompletedCount: number }
+- POST /api/email/send-verification
+  - Body: { userId: string, email: string, token: string }
 
-## UI/UX Guidelines
-Apply the project’s design system consistently:
-- Typography: Playfair Display for headings; Inter for body
-- Color palette and neutral background per the provided values
-- Card-based layout with soft shadows and rounded corners
-- Primary CTAs with dark charcoal color and white text
-- Subtle borders with rgba(0,0,0,0.08) for dividers
-- Responsive grid: 2–3 columns on wide screens; 1–2 columns on tablets/phones
-- Interactive elements: hover lift, color/contrast shifts, accessible focus states
+Security:
+- Protect verify-token and resend-token routes with authentication context (ensuring userId matches session).
+- Token validation should be server-side: compare token, check expiration, and ensure token is not consumed.
+- Rate limiting on /api/auth/resend-token (per user/IP).
+- Use HTTPS, secure cookies, and standard CSRF protections for state-changing endpoints.
+- Do not leak token values in client UI beyond necessary.
 
-## Visual Style
+Validation:
+- Client: token length/format; userId presence; token presence when verifying.
+- Server: strict schema validation; handle invalid payloads gracefully with 400 responses and helpful error messages.
+- All array results from API calls must be guarded: (data ?? []) and Array.isArray(data) checks.
+
+Required React State/Defaults:
+- useState<string | null>(null) for token
+- useState<boolean>(false) for loading
+- useState<{ status: 'pending'|'success'|'expired'|'invalid'; message?: string }>(initial)
+- useState<T[]>([]) for any arrays (e.g., potential nextSteps, error logs)
+- Initialize arrays with []: useState<T[]>([]) and avoid useState() for arrays/objects.
+
+Acceptance Criteria
+- [ ] The Email Verification page shows correct status for pending, success, and expired/invalid tokens with appropriate UI states and messaging.
+- [ ] Resend verification works: API call is made, cooldown implemented, success/failure messages shown, and token sent via email.
+- [ ] Next steps CTA directs user to Dashboard or Complete Profile based on profile-status API data.
+- [ ] All API responses are validated client-side, and all array accesses guard against null/undefined (e.g., (response?.data ?? []) or Array.isArray(response?.data) ? response.data : []).
+- [ ] The UI adheres to the visual style guidelines, including typography, color palette, spacing, and components consistent with the Login/Signup flow.
+- [ ] Security: token verification is secure, idempotent, and rate-limited on resend; no exposure of raw tokens in UI.
+
+UI/UX Guidelines
+Apply the project’s design system:
+- Ensure a warm, calm, professional aesthetic with generous whitespace.
+- Use Playfair Display for headings and Inter for body text.
+- Maintain consistent rounded corners, shadows, and subtle hover states.
+- Provide accessible focus outlines and ARIA labels for all interactive elements.
+- Responsive layout: 2–3 columns on wide screens; 1–2 columns on tablets/phones; content container max-width ~1200px.
+- Primary CTA buttons use #111111 with white text; secondary options use pastel-tinted fills or borders per design system.
+
+Visual Style
 
 Color Palette:
 - Page Background: #F6EFE0
 - Card Surfaces / Pastel Tiles: #FFFFFF, #FBD8C5, #E8DED3, #C8D4C0, #D8C9B0, #E6C9C2
 - Primary Text: #1A1A1A
-- Muted Text / Subtitles: #5A5A5A
-- Accent / UI Highlights: #2B2B2B to #111111
+- Muted Text: #5A5A5A
+- Accent: #2B2B2B to #111111
 - Primary CTA Button: #111111
 - CTA Text: #FFFFFF
-- Subtle Borders / Dividers: rgba(0,0,0,0.08)
+- Dividers: rgba(0,0,0,0.08)
 
 Typography & Layout:
-- H1: 48–56px, Playfair Display, 700–800
-- Subheads: 20–28px
-- Body: 14–16px, Inter
-- UI labels: 12–14px, Inter
-- Max content width: ~1200px; centered
-- Responsive grid: 2–3 columns on wide, 1–2 on tablet/phone
-- Elevation: soft shadows, rounded corners ~20–28px
+- Font: Playfair Display (H1 48–56px, 700–800), Inter (body 14–16px, 400–600), UI labels 12–14px
+- Layout: max-width 1200px, generous vertical rhythm, responsive grids
+- Visual Treatments: warm neutrals, subtle elevations, rounded corners
 
-Key Design Elements:
-- Cards with rounded corners and soft shadows
-- Hover states: subtle lift and color/contrast shift
-- Grid emphasis on pastel-tinted tiles and hero panels
+Key Design Elements
+- Card design with 20–28px radius; hover lift states
+- Navigation: top bar with logo, links, Get Started action
+- Data visuals: narrative/content blocks, not heavy charts
+- Interactive elements: primary CTAs as pill-like dark buttons; accessible forms
 
-Navigation:
-- Top bar with left-aligned logo/name; center/left links; right-aligned Get Started
-- Accessible focus states and bold active states
+Design Philosophy
+- Professional, calm, human-centered; narrative-first; accessible; trust-building
+- Clear hierarchy and actionable insights; responsive, grid-driven
 
-Data Visualization:
-- Narrative/tiles emphasis; if used, pastel palette-consistent visuals
+Connected Pages and Features
+- Connected Page: Login / Signup (authentication entry point with SSO and free-trial CTA)
+- Connected Features: Email Verification & Notifications (transactional emails, digests, alerts)
 
-Interactive Elements:
-- Primary CTAs: pill-like with white text
-- Secondary options: pale pastels or light borders
-- Form elements: rounded, soft borders, accessible focus outlines
-- Micro-interactions: gentle lift/shadow on hover
+Optional Considerations
+- Localized messaging and time-zone aware expiration hints
+- Audit logging for verification events
 
-Design Philosophy:
-- Professional, calm, human-centered
-- Clean, accessible, warm, narrative-first
-- Readable, audit-friendly, and trust-building
+Deliverables
+- Frontend: EmailVerificationPage with supporting components (StatusCard, Resend, NextStepsCTA, HelpPanel)
+- Backend: API endpoints for verify-token, resend-token, profile-status (as described)
+- Documentation: API contracts, data model schemas, and a deployment plan
+- Tests: unit tests for status transitions, API call mocks, and runtime safety checks (nullish handling, array guards)
 
----
-
-If you need this prompt adapted for a specific framework (React, Vue, Svelte, Next.js, Remix), authentication library (Auth0, Firebase, Supabase Auth), or backend tech (Node/Express, NestJS, serverless), I can tailor the prompts with precise file structures, component stubs, and integration hooks.
+This prompt ensures the AI development tool can implement a robust, safe, and design-consistent Email Verification feature that aligns with the project’s architecture, security requirements, and UX goals.
 
 === SUCCESS CRITERIA ===
 # Success Criteria Checklist
