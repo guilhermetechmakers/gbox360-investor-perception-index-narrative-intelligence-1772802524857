@@ -5,6 +5,7 @@ import {
   LayoutGrid,
   Building2,
   FileText,
+  History,
   Settings,
   User,
   Users,
@@ -29,6 +30,7 @@ const navItems = [
   { to: '/dashboard', label: 'Overview', icon: LayoutDashboard },
   { to: '/dashboard/companies', label: 'Companies', icon: Building2 },
   { to: '/dashboard/narratives', label: 'Narratives', icon: FileText },
+  { to: '/dashboard/historical', label: 'Historical', icon: History },
 ]
 
 const adminItems = [
