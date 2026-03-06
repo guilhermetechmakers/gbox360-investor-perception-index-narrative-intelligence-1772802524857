@@ -18,6 +18,7 @@ import RawPayloadViewer from '@/pages/RawPayloadViewer'
 import Profile from '@/pages/Profile'
 import Settings from '@/pages/Settings'
 import AdminDashboard from '@/pages/AdminDashboard'
+import AdminBilling from '@/pages/AdminBilling'
 import UserManagement from '@/pages/UserManagement'
 import IngestionMonitor from '@/pages/IngestionMonitor'
 import Analytics from '@/pages/Analytics'
@@ -70,15 +71,10 @@ function App() {
 
           <Route path="/admin" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
             <Route index element={<AdminDashboard />} />
-          </Route>
-          <Route path="/admin/users" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-            <Route index element={<UserManagement />} />
-          </Route>
-          <Route path="/admin/ingestion" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-            <Route index element={<IngestionMonitor />} />
-          </Route>
-          <Route path="/admin/analytics" element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-            <Route index element={<Analytics />} />
+            <Route path="billing" element={<AdminBilling />} />
+            <Route path="users" element={<UserManagement />} />
+            <Route path="ingestion" element={<IngestionMonitor />} />
+            <Route path="analytics" element={<Analytics />} />
           </Route>
 
           <Route path="/404" element={<NotFound />} />

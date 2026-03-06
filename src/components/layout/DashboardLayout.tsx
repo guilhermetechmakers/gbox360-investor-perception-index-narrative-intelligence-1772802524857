@@ -8,9 +8,11 @@ import {
   User,
   Users,
   BarChart3,
+  CreditCard,
   Menu,
   ChevronLeft,
   LogOut,
+  Server,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -29,8 +31,11 @@ const navItems = [
 ]
 
 const adminItems = [
-  { to: '/admin', label: 'Admin', icon: BarChart3 },
+  { to: '/admin', label: 'Overview', icon: LayoutDashboard },
   { to: '/admin/users', label: 'Users', icon: Users },
+  { to: '/admin/billing', label: 'Billing', icon: CreditCard },
+  { to: '/admin/ingestion', label: 'Ingestion', icon: Server },
+  { to: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
 ]
 
 export function DashboardLayout() {
