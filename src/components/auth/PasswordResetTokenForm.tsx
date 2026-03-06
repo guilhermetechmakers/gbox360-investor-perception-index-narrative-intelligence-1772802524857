@@ -1,20 +1,36 @@
-import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { AuthLayout, AuthLayoutCard, ErrorBanner, ValidationMessage } from '@/components/auth'
+import {
+  AuthLayout,
+  AuthLayoutCard,
+  ErrorBanner,
+  ValidationMessage,
+  PasswordStrengthMeter,
+  TokenPresenceIndicator,
+  SecurityTipsCard,
+  BackToLoginLink,
+} from '@/components/auth'
 import { authApi } from '@/api/auth'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { getPasswordStrength } from '@/utils/validation'
+import { MIN_PASSWORD_LENGTH } from '@/utils/validation'
+
+const passwordSchema = z
+  .string()
+  .min(MIN_PASSWORD_LENGTH, `Password must be at least ${MIN_PASSWORD_LENGTH} characters`)
+  .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+  .regex(/\d/, 'Password must contain at least one number')
+  .regex(/[^a-zA-Z0-9]/, 'Password must contain at least one symbol')
 
 const schema = z
   .object({
     token: z.string().min(1, 'Reset token is required'),
-    newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+    newPassword: passwordSchema,
     confirmPassword: z.string().min(1, 'Please confirm your password'),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
@@ -26,10 +42,15 @@ type FormValues = z.infer<typeof schema>
 
 export interface PasswordResetTokenFormProps {
   token: string
+  isRecoveryFlow?: boolean
   onSuccess?: () => void
 }
 
-export function PasswordResetTokenForm({ token, onSuccess }: PasswordResetTokenFormProps) {
+export function PasswordResetTokenForm({
+  token,
+  isRecoveryFlow = false,
+  onSuccess,
+}: PasswordResetTokenFormProps) {
   const confirmReset = useMutation({
     mutationFn: (input: { token: string; newPassword: string; confirmPassword: string }) =>
       authApi.confirmPasswordReset({
@@ -45,6 +66,7 @@ export function PasswordResetTokenForm({ token, onSuccess }: PasswordResetTokenF
       toast.error(err?.message ?? 'Reset failed')
     },
   })
+
   const {
     register,
     handleSubmit,
@@ -56,7 +78,6 @@ export function PasswordResetTokenForm({ token, onSuccess }: PasswordResetTokenF
   })
 
   const newPassword = watch('newPassword', '')
-  const strength = getPasswordStrength(newPassword ?? '')
 
   const onSubmit = (data: FormValues) =>
     confirmReset.mutate({
@@ -77,6 +98,9 @@ export function PasswordResetTokenForm({ token, onSuccess }: PasswordResetTokenF
               Enter your new password below. Use the link from your email.
             </p>
           </div>
+
+          <TokenPresenceIndicator hasToken={!!token?.trim()} isRecoveryFlow={isRecoveryFlow} />
+
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <ErrorBanner
               message={confirmReset.error?.message ?? ''}
@@ -90,13 +114,12 @@ export function PasswordResetTokenForm({ token, onSuccess }: PasswordResetTokenF
                 type="password"
                 autoComplete="new-password"
                 aria-invalid={!!errors.newPassword}
+                aria-describedby="password-strength"
                 {...register('newPassword')}
               />
-              {newPassword && (
-                <p className="text-xs text-muted-foreground">
-                  Strength: <span className="font-medium">{strength.label}</span>
-                </p>
-              )}
+              <div id="password-strength">
+                <PasswordStrengthMeter password={newPassword ?? ''} />
+              </div>
               <ValidationMessage message={errors.newPassword?.message} />
             </div>
             <div className="space-y-2">
@@ -119,11 +142,12 @@ export function PasswordResetTokenForm({ token, onSuccess }: PasswordResetTokenF
               {confirmReset.isPending ? 'Updating...' : 'Update password'}
             </Button>
           </form>
-          <p className="text-center text-sm text-muted-foreground">
-            <Link to="/login" className="font-medium text-primary hover:underline">
-              Back to sign in
-            </Link>
-          </p>
+
+          <SecurityTipsCard variant="confirm" />
+
+          <div className="flex justify-center">
+            <BackToLoginLink />
+          </div>
         </div>
       </AuthLayoutCard>
     </AuthLayout>

@@ -32,7 +32,7 @@ async function apiRequest<T>(
     const message = await parseErrorResponse(res)
     if (res.status === 401) {
       localStorage.removeItem('auth_token')
-      const isAuthPage = ['/login', '/signup', '/password-reset', '/email-verification'].some(
+      const isAuthPage = ['/login', '/signup', '/password-reset', '/reset-password', '/email-verification'].some(
         (p) => window.location.pathname.startsWith(p)
       )
       if (!isAuthPage) window.location.href = '/login'
